@@ -1,0 +1,6 @@
+Issue2941.agda:17,1-18,39
+Termination checking failed for the following functions:
+  concat
+Problematic calls:
+  concat (force xss)
+    (at Issue2941.agda:18,21-27)

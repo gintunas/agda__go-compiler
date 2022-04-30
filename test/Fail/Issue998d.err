@@ -1,0 +1,3 @@
+Issue998d.agda:7,9-10
+Set ℓ != Set Issue998d.ℓ
+when checking that the expression A has type Set ℓ

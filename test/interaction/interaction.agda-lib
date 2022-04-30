@@ -1,0 +1,5 @@
+name: test-interaction
+include:
+  .
+  ..
+  space\ in\ the\ path

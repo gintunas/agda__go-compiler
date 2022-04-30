@@ -1,0 +1,3 @@
+Issue205.agda:12,13-14
+Set !=< x ⊥
+when checking that the expression ⊥ has type d x * ⊥

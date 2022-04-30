@@ -1,0 +1,3 @@
+LostTypeError2.agda:25,25-30
+y != x of type A
+when checking that the expression box x has type Box

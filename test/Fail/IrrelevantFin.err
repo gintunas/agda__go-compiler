@@ -1,3 +1,0 @@
-IrrelevantFin.agda:10,33-34
-Variable n is declared irrelevant, so it cannot be used here
-when checking that the expression n has type Nat

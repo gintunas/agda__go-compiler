@@ -1,3 +1,0 @@
-Issue228.agda:19,5-18
-Set (lsuc lzero ⊔ ∞) != Set
-when checking that the expression Large × Small has type Set

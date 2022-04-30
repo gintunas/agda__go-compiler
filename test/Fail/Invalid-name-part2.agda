@@ -1,2 +1,0 @@
-postulate
-  A : →.B

@@ -1,3 +1,0 @@
-DoNotFireLiteralCatchAllForNeutrals.agda:17,13-20
-⊤ !=< NotNull s
-when checking that the expression trivial has type NotNull s

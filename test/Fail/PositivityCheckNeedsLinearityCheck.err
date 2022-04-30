@@ -1,3 +1,0 @@
-PositivityCheckNeedsLinearityCheck.agda:17,13-16
-Set₁ != Set₂
-when checking that the expression Set has type Set₂

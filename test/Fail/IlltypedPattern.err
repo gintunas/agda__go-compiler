@@ -1,3 +1,0 @@
-IlltypedPattern.agda:9,5-9
-Cannot split on argument of non-datatype A
-when checking that the pattern zero has type A

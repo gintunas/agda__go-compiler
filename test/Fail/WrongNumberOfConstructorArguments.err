@@ -1,3 +1,0 @@
-WrongNumberOfConstructorArguments.agda:9,9-10
-Too many arguments to constructor zero
-when checking that the pattern zero n has type Nat

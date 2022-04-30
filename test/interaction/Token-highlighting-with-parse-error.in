@@ -1,2 +1,0 @@
--- This command should not trigger the jump-to-error mechanism.
-ioTCM currentFile NonInteractive Direct (Cmd_tokenHighlighting currentFile Keep)

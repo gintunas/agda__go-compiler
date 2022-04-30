@@ -1,2 +1,0 @@
-primitive
-  primLevelZero : _

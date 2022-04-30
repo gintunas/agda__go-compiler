@@ -1,2 +1,0 @@
-postulate
-  __ : Set

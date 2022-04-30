@@ -1,4 +1,0 @@
-Issue1413.agda:15,3-11
-Wrong hiding used for projection  Foo.foo
-when checking the clause left hand side
-foo Foo⊤

@@ -1,5 +1,0 @@
-Issue4012UnquotePrivate.agda:22,8-9
-Not in scope:
-  g
-  at Issue4012UnquotePrivate.agda:22,8-9
-when scope checking g

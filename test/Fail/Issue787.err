@@ -1,6 +1,0 @@
-Issue787.agda:13,1-15,56
-Termination checking failed for the following functions:
-  bad
-Problematic calls:
-  bad (x ∷ xs) acc (cons p)
-    (at Issue787.agda:15,2-5)

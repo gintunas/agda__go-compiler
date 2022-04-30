@@ -1,4 +1,0 @@
-TestOptions
-  { forCompilers   = [(MAlonzo Lazy, CompilerOptions {extraAgdaArgs = ["--no-ignore-interfaces", "--ghc-flag=-j2"]})]
-  , runtimeOptions = []
-  , executeProg    = True }

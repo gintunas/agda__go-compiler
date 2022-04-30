@@ -1,5 +1,0 @@
-name: stdlib-tests
-include:
-  .
-  ../../../std-lib/
-  ../../../std-lib/src

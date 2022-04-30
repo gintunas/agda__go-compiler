@@ -1,6 +1,0 @@
-Issue59.agda:17,1-19,12
-Termination checking failed for the following functions:
-  bad₂
-Problematic calls:
-  bad₂ n
-    (at Issue59.agda:18,13-17)

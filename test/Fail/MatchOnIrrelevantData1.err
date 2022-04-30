@@ -1,4 +1,0 @@
-MatchOnIrrelevantData1.agda:17,16-23
-Cannot pattern match against irrelevant argument of type
-Fin (suc n)
-when checking that the pattern zero .n has type Fin (suc n)

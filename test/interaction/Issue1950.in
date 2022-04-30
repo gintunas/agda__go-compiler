@@ -1,3 +1,0 @@
-top_command (cmd_load currentFile ["-i.","-i.."])
-goal_command 0 cmd_make_case "B'"
-goal_command 1 cmd_make_case "q"

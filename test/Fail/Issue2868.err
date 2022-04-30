@@ -1,3 +1,0 @@
-Issue2868.agda:18,10-14
-a ≡ a !=< A
-when checking that the expression same has type A

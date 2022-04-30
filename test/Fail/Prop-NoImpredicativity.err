@@ -1,3 +1,0 @@
-Prop-NoImpredicativity.agda:4,8-26
-Prop₁ != Prop
-when checking that the expression {P : Prop} → P → P has type Prop

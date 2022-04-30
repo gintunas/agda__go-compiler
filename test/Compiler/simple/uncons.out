@@ -1,4 +1,0 @@
-EXECUTED_PROGRAM
-
-ret > ExitSuccess
-out > test/Compiler/simple/uncons.agda

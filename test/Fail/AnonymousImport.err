@@ -1,8 +1,0 @@
-AnonymousImport.agda:6,11-27
-Not in scope:
-  Common.Unit.Unit
-  at AnonymousImport.agda:6,11-27
-    (did you mean
-       'Unit' or
-       'unit'?)
-when scope checking Common.Unit.Unit

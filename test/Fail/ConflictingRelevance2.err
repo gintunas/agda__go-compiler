@@ -1,6 +1,0 @@
-ConflictingRelevance2.agda:4,37-37
-ConflictingRelevance2.agda:4,37: Parse error
-)<ERROR>
- → A
-
--- Should fail.  (Curren...

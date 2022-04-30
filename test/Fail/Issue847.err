@@ -1,8 +1,0 @@
-Issue847.agda:5,1-10,15
-Termination checking failed for the following functions:
-  bad
-Problematic calls:
-  bad′
-    (at Issue847.agda:6,7-11)
-  bad
-    (at Issue847.agda:10,12-15)

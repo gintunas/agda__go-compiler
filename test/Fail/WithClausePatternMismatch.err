@@ -1,6 +1,0 @@
-WithClausePatternMismatch.agda:10,1-11,17
-With clause pattern d is not an instance of its parent pattern c
-when checking that the clause
-test _ c with Set
-test _ d | z = ⊤
-has type (x : ⊤) → P x → Set

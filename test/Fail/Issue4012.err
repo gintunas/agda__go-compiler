@@ -1,3 +1,0 @@
-Issue4012.agda:27,8-12
-f != g of type D
-when checking that the expression refl has type f ≡ g

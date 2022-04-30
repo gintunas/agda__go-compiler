@@ -1,1 +1,0 @@
-record _ : Set where

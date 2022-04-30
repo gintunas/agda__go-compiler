@@ -1,3 +1,0 @@
-top_command (cmd_load currentFile [])
-top_command (cmd_infer_toplevel Instantiated "F")
-top_command (cmd_infer_toplevel Instantiated "G")

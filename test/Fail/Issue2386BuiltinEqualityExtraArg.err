@@ -1,3 +1,0 @@
-Issue2386BuiltinEqualityExtraArg.agda:9,1-29
-The type of BUILTIN EQUALITY must be a polymorphic relation
-when checking the pragma BUILTIN EQUALITY _≡_

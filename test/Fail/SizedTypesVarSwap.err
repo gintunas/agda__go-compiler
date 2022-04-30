@@ -1,6 +1,0 @@
-SizedTypesVarSwap.agda:11,1-13,15
-Termination checking failed for the following functions:
-  bad
-Problematic calls:
-  bad (suc y) x
-    (at SizedTypesVarSwap.agda:12,17-20)

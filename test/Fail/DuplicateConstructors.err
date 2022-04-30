@@ -1,6 +1,0 @@
-DuplicateConstructors.agda:5,3-6,4
-Duplicate constructor c in datatype
-when scope checking the declaration
-  data D where
-    c : D
-    c : D

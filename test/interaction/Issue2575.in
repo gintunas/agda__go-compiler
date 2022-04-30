@@ -1,2 +1,0 @@
-top_command (Cmd_load currentFile ["--caching"])
-top_command (Cmd_load currentFile ["--caching"])

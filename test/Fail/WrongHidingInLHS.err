@@ -1,4 +1,0 @@
-WrongHidingInLHS.agda:5,4-5
-Unexpected implicit argument
-when checking the clause left hand side
-f {x}

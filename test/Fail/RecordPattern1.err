@@ -1,3 +1,0 @@
-RecordPattern1.agda:2,6-21
-Cannot split on argument of non-datatype Set
-when checking that the pattern record { x = _ } has type Set

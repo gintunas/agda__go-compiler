@@ -1,6 +1,0 @@
-TerminationNoArgs.agda:3,1-4,12
-Termination checking failed for the following functions:
-  loop
-Problematic calls:
-  loop
-    (at TerminationNoArgs.agda:4,8-12)

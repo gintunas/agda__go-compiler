@@ -1,5 +1,0 @@
-Issue477b.agda:4,1-5,16
-Missing type signature for record definition D
-when scope checking the declaration
-  record D where
-    field A : Set

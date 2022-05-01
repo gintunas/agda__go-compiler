@@ -1,3 +1,0 @@
-IncompatibleTerminationPragmas.agda:3,1-10,8
-In a mutual block, either all functions must have the same (or no)
-termination checking pragma.

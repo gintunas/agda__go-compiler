@@ -1,3 +1,0 @@
-BuiltinMustBeConstructor.agda:13,1-28
-false must be a constructor in the binding to builtin FALSE
-when checking the pragma BUILTIN FALSE false

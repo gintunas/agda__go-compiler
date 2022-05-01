@@ -1,3 +1,0 @@
-Issue3566-2.agda:12,8-9
-(r : R) → A !=< A
-when checking that the expression b has type A

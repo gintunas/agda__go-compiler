@@ -1,3 +1,0 @@
-Issue2167.agda:4,8-12
-Invalid dotted expression
-when checking that the expression .Set has type Set₁

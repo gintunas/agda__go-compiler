@@ -1,3 +1,0 @@
--itest/Succeed/installed-libs
---library-file=test/Succeed/installed-libs/libraries
---library=test-succeed

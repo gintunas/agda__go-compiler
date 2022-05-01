@@ -1,3 +1,0 @@
-WrongBuiltinUnit.agda:7,1-26
-Builtin UNIT must be a singleton record type
-when checking the pragma BUILTIN UNIT Bool

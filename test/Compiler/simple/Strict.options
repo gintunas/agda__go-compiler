@@ -1,8 +1,0 @@
-TestOptions
-  { forCompilers =
-      [ (MAlonzo StrictData, CompilerOptions {extraAgdaArgs = []})
-      , (MAlonzo Strict,     CompilerOptions {extraAgdaArgs = []})
-      ]
-  , runtimeOptions = []
-  , executeProg = True
-  }

@@ -1,5 +1,0 @@
-Issue2480false.agda:23,16-60
-tt != ff of type Bool
-when checking that the expression
-refl {x = ap {A = Bool→cBool} (λ f → f tt) p} has type
-ap (λ f → f tt) p ≡ ap (λ f → f ff) p

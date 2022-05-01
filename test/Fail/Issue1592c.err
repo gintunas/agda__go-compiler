@@ -1,6 +1,0 @@
-Issue1592c.agda:15,1-16,26
-D is not strictly positive, because it occurs
-in the second argument of dup
-in the first argument of proj₁
-in the type of the constructor c
-in the definition of D.

@@ -1,3 +1,0 @@
-SplitOnIrrelevant.agda:10,5-9
-Cannot pattern match against irrelevant argument of type Bool
-when checking that the pattern true has type Bool

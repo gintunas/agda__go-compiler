@@ -1,3 +1,0 @@
-Issue5033.agda:4,10-29
-Missing binding for primLockUniv primitive.
-when checking that the expression ∀ _ → Set is a type

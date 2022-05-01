@@ -1,3 +1,0 @@
-Issue2365.agda:19,5-8
-Negative literals are not supported in patterns
-when checking that the pattern -20 has type Int

@@ -1,2 +1,0 @@
-top_command (Cmd_load currentFile [])
-top_command (Cmd_compile NonExistingBackend currentFile [])

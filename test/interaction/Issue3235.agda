@@ -1,3 +1,0 @@
--- This test case is aimed at checking that one can give RTS options
--- (as well as other options) using the Emacs mode. It does not test
--- backend options.

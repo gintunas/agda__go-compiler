@@ -1,7 +1,0 @@
-Issue2366.agda:11,1-12,23
-With clause pattern [] is not an instance of its parent pattern
-y ∷ ys
-when checking that the clause
-test (x ∷ y ∷ ys) with []
-test (x ∷ []) | q = []
-has type {A : Set} → List A → List A

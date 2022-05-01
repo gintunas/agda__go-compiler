@@ -1,2 +1,0 @@
-default :
-	agda Copatterns.agda

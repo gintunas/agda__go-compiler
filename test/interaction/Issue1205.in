@@ -1,3 +1,0 @@
-top_command (cmd_load currentFile ["-i..","-i."])
-goal_command 0 cmd_give "p ~ p'"
-

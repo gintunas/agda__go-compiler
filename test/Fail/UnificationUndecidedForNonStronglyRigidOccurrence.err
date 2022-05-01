@@ -1,3 +1,0 @@
-Failed to solve the following constraints:
-  Is empty: n ≡ f n (stuck)
-      [ at UnificationUndecidedForNonStronglyRigidOccurrence.agda:12,7-9 ]

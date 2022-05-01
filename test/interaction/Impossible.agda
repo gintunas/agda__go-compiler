@@ -1,3 +1,0 @@
-module Impossible where
-
-{-# IMPOSSIBLE #-}

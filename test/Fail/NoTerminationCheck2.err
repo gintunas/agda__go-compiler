@@ -1,3 +1,0 @@
-NoTerminationCheck2.agda:7,1-24
-Termination checking pragmas can only precede a function definition
-or a mutual block (that contains a function definition).

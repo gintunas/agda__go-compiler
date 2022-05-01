@@ -1,3 +1,0 @@
-NoSplitInterval.agda:12,5-7
-Cannot split on argument of non-datatype I
-when checking that the pattern i0 has type I

@@ -1,4 +1,0 @@
-Issue2576MissingData.agda:3,1-13
-Missing type signature for data definition A
-when scope checking the declaration
-  data A where

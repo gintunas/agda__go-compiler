@@ -1,3 +1,0 @@
--- Checks that highlighting is generated correctly for all code in
--- the record modules in the mutual block.
-IOTCM currentFile NonInteractive Direct (Cmd_load currentFile [])

@@ -1,4 +1,0 @@
-name: lib-b
-depend: lib-c
-include: .
-flags: --safe

@@ -1,2 +1,0 @@
-test : Set
-test = {! M !}

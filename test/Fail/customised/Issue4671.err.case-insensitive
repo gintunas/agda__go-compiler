@@ -1,6 +1,0 @@
-customised/Issue4671.agda:1,1-22
-Case mismatch when accessing file
-agda-default-include-path/Agda/PRIMITIVE.agda
-through module name Agda.PRIMITIVE
-when scope checking the declaration
-  import Agda.PRIMITIVE

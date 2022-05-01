@@ -1,1 +1,0 @@
-module LineEndings.Mac wherepostulate ThisWorks : Set

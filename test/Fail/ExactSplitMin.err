@@ -1,6 +1,0 @@
-ExactSplitMin.agda:11,1-17
-Exact splitting is enabled, but the following clause could not be
-preserved as definitional equalities in the translation to a case
-tree:
-  min x zero = zero
-when checking the definition of min

@@ -1,4 +1,0 @@
-Issue1236.agda:8,1-16
-Incomplete pattern matching for boom. Missing cases:
-  boom Zero
-when checking the definition of boom

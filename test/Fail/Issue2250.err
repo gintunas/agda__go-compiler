@@ -1,3 +1,0 @@
-Failed to solve the following constraints:
-  Is empty: f true ≡ f false (blocked on any(_a_6, _A_7))
-      [ at Issue2250.agda:19,10-12 ]

@@ -1,3 +1,0 @@
--itest/Succeed/default-flags
---library-file=test/Succeed/default-flags/libraries
---library=lib

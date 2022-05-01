@@ -1,3 +1,0 @@
-top_command (Cmd_load currentFile [])
--- The following command should succeed.
-goal_command 0 (Cmd_give WithForce) "f"

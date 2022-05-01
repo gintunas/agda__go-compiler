@@ -1,3 +1,0 @@
-Issue2446.agda:7,1-13
-Cannot create a module containing a copy of C.primPOr
-when checking the module application module M = C

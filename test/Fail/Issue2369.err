@@ -1,6 +1,0 @@
-Issue2369.agda:8,1-24
-Module cannot be imported since it has open interaction points
-(consider adding {-# OPTIONS --allow-unsolved-metas #-} to this
-module)
-when scope checking the declaration
-  import Issue2369.OpenIP

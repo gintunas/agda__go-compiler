@@ -1,3 +1,0 @@
-BuiltinFlatBadType.agda:10,22-23
-A → ⊥ !=< A
-when checking that the expression ♭ has type ∞ A → A

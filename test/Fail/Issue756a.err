@@ -1,3 +1,0 @@
-Issue756a.agda:13,12-26
-Let-expressions are not allowed in dot patterns
-when scope checking let x = n in x

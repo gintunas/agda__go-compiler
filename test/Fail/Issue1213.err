@@ -1,3 +1,0 @@
-Issue1213.agda:23,8-10
-⊤ !=< ⊥
-when checking that the expression tt has type IsZero (suc _15)

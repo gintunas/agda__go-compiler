@@ -1,2 +1,0 @@
-primitive
-  primSetOmega : _

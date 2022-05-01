@@ -1,0 +1,5 @@
+TermSplicingLooping.agda:6,1-8,40
+Termination checking failed for the following functions:
+  f
+Problematic calls:
+  f

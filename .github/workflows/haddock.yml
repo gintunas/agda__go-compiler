@@ -1,0 +1,59 @@
+name: Haddock
+# Test documentation: haddock, user-manual.
+# Since `stack haddock` compiles Agda but `cabal haddock` does
+# not, this test is faster using `BUILD=CABAL` [Issue #2188].
+on:
+  push:
+    paths:
+    - 'src/**.hs'
+    - '.github/workflows/haddock.yml'
+  pull_request:
+    paths:
+    - 'src/**.hs'
+    - '.github/workflows/haddock.yml'
+
+jobs:
+  build:
+    if: |
+      !contains(github.event.head_commit.message, '[skip ci]')
+      && !contains(github.event.head_commit.message, '[ci skip]')
+      && !contains(github.event.head_commit.message, '[github skip]')
+      && !contains(github.event.head_commit.message, '[skip github]')
+
+    runs-on: ubuntu-18.04
+
+    strategy:
+      matrix:
+        ghc-ver: ["8.10.2"]
+        cabal-ver: ["3.2"]
+
+    steps:
+    - uses: actions/checkout@v2.3.2
+      with:
+        submodules: recursive
+
+    - uses: actions/setup-haskell@v1.1.3
+      with:
+        ghc-version: '8.10.2'
+        cabal-version: '3.2'
+
+    - name: Resolve dependencies
+      run: |
+        cabal update
+        cabal configure -fenable-cluster-counting --enable-tests --disable-library-profiling
+
+    - uses: actions/cache@v2.1.0
+      name: Cache dependencies
+      with:
+        path: "~/.cabal"
+        key: ${{ runner.os }}-new-cabal-${{ matrix.ghc-ver }}-${{ matrix.cabal-ver }}-${{ hashFiles('**/plan.json') }}
+
+    - name: Install dependencies
+      run: |
+        cabal install alex happy --overwrite-policy=always
+        cabal build --dependencies-only --force-reinstalls
+
+    # Testing Haddock [Issue 1773]
+    - name: Build Haddock
+      run: |
+        cabal haddock

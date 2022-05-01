@@ -1,0 +1,43 @@
+name: Whitespace
+on: [push, pull_request]
+
+jobs:
+  check:
+    if: |
+      !contains(github.event.head_commit.message, '[skip ci]')
+      && !contains(github.event.head_commit.message, '[ci skip]')
+      && !contains(github.event.head_commit.message, '[github skip]')
+      && !contains(github.event.head_commit.message, '[skip github]')
+
+    runs-on: ubuntu-18.04
+
+    strategy:
+      matrix:
+        ghc-ver: [8.10.2]
+
+    steps:
+      - uses: actions/checkout@v2.3.2
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-haskell@v1.1.3
+        with:
+          ghc-version: ${{ matrix.ghc-ver }}
+
+      - uses: actions/cache@v2.1.0
+        name: Cache dependencies
+        with:
+          path: "~/.stack"
+          key: ${{ runner.os }}-${{ hashFiles(format('stack-{0}.yaml', matrix.ghc-ver)) }}
+
+
+      - name: Install fix-whitespace
+        run: |
+          cabal update
+          git submodule update --init src/fix-whitespace
+          cd src/fix-whitespace/
+          stack --stack-yaml stack-${{ matrix.ghc-ver }}.yaml --system-ghc install
+          cd ../..
+      - name: Check the whitespace issue
+        run: |
+          $HOME/.local/bin/fix-whitespace --check

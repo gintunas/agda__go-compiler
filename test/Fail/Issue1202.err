@@ -1,0 +1,3 @@
+Issue1202.agda:7,10-11
+Too many arguments to constructor c
+when checking that the pattern c a b has type D A

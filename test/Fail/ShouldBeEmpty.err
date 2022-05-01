@@ -1,0 +1,6 @@
+ShouldBeEmpty.agda:12,1-7
+One should be empty, but the following constructor patterns are
+valid:
+  one
+when checking the clause left hand side
+bad ()

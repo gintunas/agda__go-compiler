@@ -1,5 +1,5 @@
 name:            Agda
-version:         2.6.2.2
+version:         2.6.2.2-golang
 cabal-version:   >= 1.10
 build-type:      Custom
 license:         OtherLicense
@@ -148,7 +148,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/agda/agda.git
-  tag:      v2.6.2.2
+  tag:      v2.6.2.2-golang
 
 flag cpphs
   default:     False
@@ -309,6 +309,10 @@ library
                     Agda.Compiler.JS.Syntax
                     Agda.Compiler.JS.Substitution
                     Agda.Compiler.JS.Pretty
+                    Agda.Compiler.GoLang.Compiler
+                    Agda.Compiler.GoLang.Syntax
+                    Agda.Compiler.GoLang.Substitution
+                    Agda.Compiler.GoLang.Pretty
                     Agda.Compiler.MAlonzo.Coerce
                     Agda.Compiler.MAlonzo.Compiler
                     Agda.Compiler.MAlonzo.Encode

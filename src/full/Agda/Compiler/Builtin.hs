@@ -11,6 +11,7 @@ import Agda.Compiler.JS.Compiler (jsBackend)
 import Agda.Interaction.Highlighting.Dot (dotBackend)
 import Agda.Interaction.Highlighting.HTML (htmlBackend)
 import Agda.Interaction.Highlighting.LaTeX (latexBackend)
+import Agda.Compiler.GoLang.Compiler (goBackend)
 
 builtinBackends :: [Backend]
 builtinBackends =
@@ -19,4 +20,5 @@ builtinBackends =
   , dotBackend
   , htmlBackend
   , latexBackend
+  , goBackend
   ]

@@ -95,7 +95,6 @@ newtype Comment = Comment String
 instance Eq Comment where _ == _ = True
 instance Ord Comment where compare _ _ = EQ
 
-
 type GoQName = List1 MemberId
 
 data Module = Module

@@ -3,6 +3,8 @@
 module Agda.Compiler.GoLang.Compiler where
 
 import Prelude hiding ( null, writeFile )
+
+import Control.DeepSeq
 import Control.Monad.Trans
 import Control.Monad (zipWithM)
 
@@ -16,6 +18,8 @@ import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Data.Text as T
 
+import GHC.Generics (Generic)
+
 import System.Directory   ( createDirectoryIfMissing, setCurrentDirectory  )
 import System.Environment ( setEnv )
 import System.FilePath    ( splitFileName, (</>) )
@@ -24,7 +28,7 @@ import System.Process     ( callCommand )
 import Paths_Agda
 
 import Agda.Interaction.Options
-import Agda.Interaction.Imports ( isNewerThan )
+import Agda.Utils.FileName ( isNewerThan )
 
 import Agda.Syntax.Common
 import Agda.Syntax.Concrete.Name ( isNoName )
@@ -65,7 +69,7 @@ import Agda.Compiler.ToTreeless
 import Agda.Compiler.Treeless.EliminateDefaults
 import Agda.Compiler.Treeless.EliminateLiteralPatterns
 import Agda.Compiler.Treeless.GuardsToPrims
-import Agda.Compiler.Treeless.Erase ( computeErasedConstructorArgs, typeWithoutParams )
+import Agda.Compiler.Treeless.Erase ( computeErasedConstructorArgs )
 import Agda.Compiler.Treeless.Subst ()
 import Agda.Compiler.Backend (Backend(..), Backend'(..), Recompile(..))
 
@@ -119,6 +123,10 @@ data GoOptions = GoOptions
       -- ^ Run generated code through interpreter.
   , optGoTransform   :: Bool    
   }
+  deriving Generic
+
+
+instance NFData GoOptions
 
 defaultGoOptions :: GoOptions
 defaultGoOptions = GoOptions
@@ -166,21 +174,24 @@ goPostCompile opts _ ms = do
 
 type GoModuleEnv = Maybe CoinductionKit
 
-goPreModule :: GoOptions -> IsMain -> ModuleName -> FilePath -> TCM (Recompile GoModuleEnv Module)
+goPreModule :: GoOptions -> IsMain -> ModuleName -> Maybe FilePath -> TCM (Recompile GoModuleEnv Module)
 goPreModule _opts _ m ifile = ifM uptodate noComp yesComp
   where
-    uptodate = liftIO =<< isNewerThan <$> outFile_ <*> pure ifile
+    uptodate = case ifile of
+      Nothing -> pure False
+      Just ifile -> liftIO =<< isNewerThan <$> outFile_ <*> pure ifile
+    ifileDesc = fromMaybe "(memory)" ifile
 
     noComp = do
       m   <- prettyShow <$> curMName
       out <- outFile_
-      reportSLn "compile.go" 1 $ repl [m, ifile, out] "Compiling g <<0>> in <<1>> to <<2>>"
+      reportSLn "compile.go" 2 . (++ " : no compilation is needed.") . prettyShow =<< curMName
       Recompile <$> coinductionKit
 
     yesComp = do
       m   <- prettyShow <$> curMName
       out <- outFile_
-      reportSLn "compile.go" 1 $ repl [m, ifile, out] "Compiling go <<0>> in <<1>> to <<2>>"
+      reportSLn "compile.go" 1 $ repl [m, ifileDesc, out] "Compiling go <<0>> in <<1>> to <<2>>"
       Recompile <$> coinductionKit
 
 goPostModule :: GoOptions -> GoModuleEnv -> IsMain -> ModuleName -> [Maybe Exp] -> TCM Module
@@ -192,6 +203,7 @@ goPostModule opts _ isMain _ defs = do
   let importDeclarations = GoImportDeclarations $ (map goImportDecl is) ++ ["math/big", "helper"]
   let importUsages = (map goImportUsg is) ++ [(GoImportUsage "big"), (GoImportUsage "helper")] 
   let mod = Module m (importDeclarations : ([GoImportField] ++ importUsages)) es
+
   writeModule mod
   mdir <- compileDir
   when (optGoTransform opts) $ do
@@ -329,9 +341,9 @@ createSignatureInner :: [TypeId] -> String -> [GoFunctionSignature]
 createSignatureInner (head : tail) retName = (InnerSignature (ftype head) (fReturnTypes tail) (TypeId retName)) : (createSignatureInner tail retName)
 createSignatureInner [] retName = []
 
-countFalses :: [Bool] -> Nat
+countFalses :: [T.ArgUsage] -> Nat
 countFalses [] = 0
-countFalses (False : xs) = 1 + countFalses xs
+countFalses (T.ArgUnused : xs) = 1 + countFalses xs
 countFalses (_ : xs) = countFalses xs
 
 extractReturnType :: Exp -> TCM TypeId
@@ -359,7 +371,7 @@ definition' kit q d t ls = do
       reportSDoc "compile.go" 30 $ " f1:" <+> (text . show) d
       return Nothing
     DataOrRecSig{} -> __IMPOSSIBLE__
-    Axiom -> return Nothing
+    Axiom{} -> return Nothing
 
     GeneralizableVar{} -> return Nothing
     PrimitiveSort{} -> return Nothing
@@ -368,7 +380,7 @@ definition' kit q d t ls = do
       reportSDoc "function.go" 5 $ "compiling fun:" <+> prettyTCM q
       fname <- liftTCM $ fullName q
       caseMaybeM (toTreeless T.EagerEvaluation q) (pure Nothing) $ \ treeless -> do
-        used <- getCompiledArgUse q
+        used <- fromMaybe [] <$> getCompiledArgUse q
         funBody <- eliminateCaseDefaults =<<
           eliminateLiteralPatterns
           (convertGuards treeless)
@@ -381,14 +393,18 @@ definition' kit q d t ls = do
         let args = map (snd . unDom) (telToList tel)
         reportSDoc "function.go" 30 $ " goArg:" <+> (text . show) goArg
         reportSDoc "function.go" 30 $ " args:" <+> (text . show) args
+
         let (body, given) = lamView funBody
               where
                 lamView :: T.TTerm -> (T.TTerm, Int)
                 lamView (T.TLam t) = (+1) <$> lamView t
                 lamView t = (t, 0)
-            etaN = length $ dropWhile id $ reverse $ drop given used
+
+            etaN = length $ dropWhile (== T.ArgUsed) $ reverse $ drop given used
+
         funBody' <- compileTerm kit ((length goArg) - 1) goArg
             $ T.mkTApp (raise etaN body) (T.TVar <$> [etaN-1, etaN-2 .. 0])
+
         functionSignature <- createSignature fname goArg name genericTypesUsed
         let emptyFunction = functionSignature Null
         returnType <- extractReturnType emptyFunction
@@ -421,7 +437,7 @@ definition' kit q d t ls = do
       reportSDoc "compile.go" 5 $ "compiling gg:" <+> (text . show) gg
       let np = arity t - nc
       erased <- getErasedConArgs q
-      let inverseErased = map not erased
+      let inverseErased = map (\b -> if b then T.ArgUnused else T.ArgUsed) erased
       reportSDoc "compile.go" 20 $ " erased:" <+> (text . show) inverseErased
       constName <- fullName q
       (goArg, goRes) <- goTelApproximation t inverseErased
@@ -469,8 +485,8 @@ constructorName' s = do
     Nothing -> name
     Just rem -> name ++ "_" ++ (constructorName' rem)
 
-map2 :: [Bool] -> [a] -> [a]
-map2 bs as = map snd $ filter fst $ zip bs as
+map2 :: [T.ArgUsage] -> [a] -> [a]
+map2 bs as = map snd $ filter (\(x, _) -> x == T.ArgUsed) $ zip bs as
 
 getVarName :: Nat -> String
 getVarName n = [chr ((ord 'A') + n)]
@@ -542,13 +558,19 @@ compileTerm kit paramCount args t = do
       T.TApp (T.TPrim T.PIf) [c, x, y]  -> do
         GoIf <$> (go c) <*> (go x) <*> (go y)
       T.TApp (T.TPrim primType) [x, y]  -> do
-        BinOp <$> (go (T.TPrim primType)) <*> (go x)  <*> (go y)  
+        BinOp <$> (go (T.TPrim primType)) <*> (go x)  <*> (go y) 
+
       T.TApp t' xs | Just f <- getDef t' -> do
-        used <- either getCompiledArgUse (\x -> fmap (map not) $ getErasedConArgs x) f
+        used <- case f of
+          Left  q -> fromMaybe [] <$> getCompiledArgUse q
+          Right c -> map (\b -> if b then T.ArgUnused else T.ArgUsed) <$> getErasedConArgs c        
+        -- either getCompiledArgUse (\x -> fmap (map (\b -> if b then T.ArgUnused else T.ArgUsed)) $ getErasedConArgs x) f
+
         reportSDoc "function.go" 30 $ "\n just f used:" <+> (text . show) used
         reportSDoc "function.go" 30 $ "\n just f:" <+> (text . show) (getDef t')
         reportSDoc "function.go" 30 $ "\n TApp xs:" <+> (text . show) xs
         unit
+
       T.TApp t xs -> do
         reportSDoc "function.go" 30 $ "\n TApp xs:" <+> (text . show) xs
         unit
@@ -564,7 +586,7 @@ compileTerm kit paramCount args t = do
         reportSDoc "function.go" 30 $ "\n TCon d:" <+> (text . show) d
         name <- liftTCM $ fullName q
         return $ GoCreateStruct name []
-      T.TCase sc ct def alts | T.CTData dt <- T.caseType ct -> do
+      T.TCase sc ct def alts | T.CTData _ dt <- T.caseType ct -> do
         cases <- mapM (compileAlt kit paramCount args (paramCount - sc)) alts
         return $ GoSwitch (GoVar (paramCount - sc)) cases
       T.TCase _ _ _ _ -> __IMPOSSIBLE__
@@ -711,7 +733,7 @@ goTypeApproximationRet fv t = do
           _ -> return $ ConstructorType (getVarName n) "interface{}"
   go fv (unEl t)
 
-goTelApproximation :: Type -> [Bool] -> TCM ([TypeId], TypeId)
+goTelApproximation :: Type -> [T.ArgUsage] -> TCM ([TypeId], TypeId)
 goTelApproximation t erased = do
   TelV tel res <- telView t
   let args = map (snd . unDom) (telToList tel)
@@ -722,7 +744,7 @@ goTelApproximation t erased = do
   reportSDoc "compile.go" 20 $ " filteredArgs:" <+> (text . show) filteredArgs
   (,) <$> zipWithM (goTypeApproximation) [0..] filteredArgs <*> goTypeApproximationRet (length args) res
 
-goTelApproximationFunction :: Type -> [Bool] -> TCM ([TypeId], TypeId)
+goTelApproximationFunction :: Type -> [T.ArgUsage] -> TCM ([TypeId], TypeId)
 goTelApproximationFunction t erased = do
   TelV tel res <- telView t
   let args = map (snd . unDom) (telToList tel)

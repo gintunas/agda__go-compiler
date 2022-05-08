@@ -2,7 +2,7 @@
 
 module Agda.Compiler.GoLang.Compiler where
 
-import Prelude hiding ( null, writeFile )
+import Prelude hiding ( writeFile )
 
 import Control.DeepSeq
 import Control.Monad.Trans
@@ -10,22 +10,18 @@ import Control.Monad (zipWithM)
 
 import Data.Char     ( isSpace, chr, ord, isLetter, isDigit, isAsciiUpper)
 import Data.Foldable ( forM_ )
-import Data.List     ( intercalate, partition )
+import Data.List     ( intercalate )
 import Data.Set      ( Set )
 import Data.Maybe (fromMaybe)
 
 import qualified Data.Set as Set
 import qualified Data.Map as Map
-import qualified Data.Text as T
 
 import GHC.Generics (Generic)
 
 import System.Directory   ( createDirectoryIfMissing, setCurrentDirectory, getHomeDirectory )
-import System.Environment ( setEnv )
 import System.FilePath    ( splitFileName, (</>) )
-import System.Process     ( callCommand )
-
-import Paths_Agda
+-- import System.Process     ( callCommand )
 
 import Agda.Interaction.Options
 import Agda.Utils.FileName ( isNewerThan )
@@ -34,33 +30,22 @@ import Agda.Syntax.Common
 import Agda.Syntax.Concrete.Name ( isNoName )
 import Agda.Syntax.Abstract.Name
   ( ModuleName, QName,
-    mnameToList, qnameName, qnameModule, nameId, qnameToList0, uglyShowName )
+    mnameToList, qnameName, qnameModule, nameId, uglyShowName )
 import Agda.Syntax.Internal
 import Agda.Syntax.Literal ( Literal(..) )
-import Agda.Syntax.Internal.Names (namesIn)
 import qualified Agda.Syntax.Treeless as T
-import Agda.Compiler.Treeless.NormalizeNames
 
 import Agda.TypeChecking.Monad
-import Agda.TypeChecking.Datatypes
-import Agda.TypeChecking.Quote
-import Agda.TypeChecking.Reduce ( instantiateFull, reduce )
+import Agda.TypeChecking.Reduce ( instantiateFull )
 import Agda.TypeChecking.Substitute as TC ( TelV(..), raise, subst )
 import Agda.TypeChecking.Pretty
 import Agda.TypeChecking.Telescope
-import Agda.TypeChecking.Rewriting
 import Agda.TypeChecking.Primitive (getBuiltinName)
 
-import Agda.Utils.Function ( iterate' )
-import Agda.Utils.List ( headWithDefault )
-import Agda.Utils.List1 ( List1, pattern (:|) )
 import qualified Agda.Utils.List1 as List1
-import Agda.Utils.Maybe ( boolToMaybe, catMaybes, caseMaybeM, whenNothing )
+import Agda.Utils.Maybe ( catMaybes, caseMaybeM )
 import Agda.Utils.Monad ( ifM, when )
-import Agda.Utils.Null  ( null )
 import Agda.Utils.Pretty (prettyShow, render)
-import qualified Agda.Utils.Pretty as P
-import Agda.Utils.IO.Directory
 import Agda.Utils.IO.UTF8 ( writeFile )
 import Agda.Utils.Singleton ( singleton )
 
@@ -70,16 +55,45 @@ import Agda.Compiler.Treeless.EliminateDefaults
 import Agda.Compiler.Treeless.EliminateLiteralPatterns
 import Agda.Compiler.Treeless.GuardsToPrims
 import Agda.Compiler.Treeless.Erase ( computeErasedConstructorArgs )
-import Agda.Compiler.Treeless.Subst ()
 import Agda.Compiler.Backend (Backend(..), Backend'(..), Recompile(..))
 
 import Agda.Compiler.GoLang.Syntax
-  (GoQName, Exp(Self,Global,Undefined,Null,String,Char,Integer,GoInterface,GoStruct,GoStructElement,Local,Lambda,GoFunction, GoSwitch, GoIf, GoCase, GoCreateStruct, Const, GoMethodCall, GoVar, GoLet, BinOp, ReturnExpression, GoMethodCallParam),
-    LocalId(LocalId), GlobalId(GlobalId), MemberId(MemberId,MemberIndex), GoImports(GoImportUsage, GoImportField, GoImportDeclarations), Module(Module, modName), Comment(Comment), TypeId(TypeId, ConstructorType, GenericFunctionType, EmptyType, EmptyFunctionParameter, FunctionType, FunctionReturnElement, PiType), GoFunctionSignature(OuterSignature, InnerSignature),
+  (GoQName,
+   Exp(Self,
+  Global,
+  Undefined,
+  Null,
+  String,
+  Char,
+  Integer,
+  GoInterface,
+  GoStruct,
+  Lambda,
+  GoFunction,
+   GoSwitch,
+   GoIf,
+   GoCase,
+   GoCreateStruct,
+   Const,
+   GoMethodCall,
+   GoVar,
+   GoLet,
+   BinOp,
+   ReturnExpression,
+   GoMethodCallParam),
+
+     GlobalId(GlobalId),
+     MemberId(MemberId),
+     GoImports(GoImportUsage,
+     GoImportField,
+     GoImportDeclarations),
+     Module(Module,
+     modName),
+     TypeId(TypeId,
+     ConstructorType, GenericFunctionType, EmptyType, EmptyFunctionParameter, FunctionType, FunctionReturnElement, PiType), GoFunctionSignature(OuterSignature, InnerSignature),
     modName
   )
-import Agda.Compiler.GoLang.Substitution
-
+  
 import qualified Agda.Compiler.GoLang.Pretty as GoPretty
 
 import Agda.Utils.Impossible (__IMPOSSIBLE__)
@@ -410,7 +424,7 @@ definition' kit q d t ls = do
             etaN = length $ dropWhile (== T.ArgUsed) $ reverse $ drop given used
 
         funBody' <- compileTerm kit ((length goArg) - 1) goArg
-            $ T.mkTApp (raise etaN body) (T.TVar <$> [etaN-1, etaN-2 .. 0])
+            $ T.mkTApp (TC.raise etaN body) (T.TVar <$> [etaN-1, etaN-2 .. 0])
 
         functionSignature <- createSignature fname goArg name genericTypesUsed
         let emptyFunction = functionSignature Null

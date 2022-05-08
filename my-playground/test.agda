@@ -15,21 +15,21 @@
 --   convert 9 = '9'
 --   convert _ = ' ' -- Never happens.
 
-open import Data.Nat.Show
+-- open import Data.Nat.Show
 
 open import Agda.Builtin.Nat
-open import Agda.Builtin.String
+-- open import Agda.Builtin.String
 
-open import Agda.Builtin.IO using (IO)
-open import Agda.Builtin.Unit using (⊤)
+-- open import Agda.Builtin.IO using (IO)
+-- open import Agda.Builtin.Unit using (⊤)
 
-postulate putStrLn : String → IO ⊤
-{-# FOREIGN GHC import qualified Data.Text as T #-}
-{-# COMPILE GHC putStrLn = putStrLn . T.unpack #-}
+-- postulate putStrLn : String → IO ⊤
+-- {-# FOREIGN GHC import qualified Data.Text as T #-}
+-- {-# COMPILE GHC putStrLn = putStrLn . T.unpack #-}
 
 add : Nat → Nat → Nat
 add n zero      = n
 add n (suc m)   = add (suc n) m
 
-add_show : Nat → Nat → IO ⊤
-add_show n m = putStrLn (show (add n m))
+-- add_show : Nat → Nat → IO ⊤
+-- add_show n m = putStrLn (show (add n m))

@@ -1,102 +1,109 @@
 -- | Main module for Go backend.
-
 module Agda.Compiler.GoLang.Compiler where
 
-import Prelude hiding ( writeFile )
-
-import Control.DeepSeq
-import Control.Monad.Trans
-import Control.Monad (zipWithM)
-
-import Data.Char     ( isSpace, chr, ord, isLetter, isDigit, isAsciiUpper)
-import Data.Foldable ( forM_ )
-import Data.List     ( intercalate )
-import Data.Set      ( Set )
-import Data.Maybe (fromMaybe)
-
-import qualified Data.Set as Set
-import qualified Data.Map as Map
-
-import GHC.Generics (Generic)
-
-import System.Directory   ( createDirectoryIfMissing, setCurrentDirectory, getHomeDirectory )
-import System.FilePath    ( splitFileName, (</>) )
 -- import System.Process     ( callCommand )
 
-import Agda.Interaction.Options
-import Agda.Utils.FileName ( isNewerThan )
-
-import Agda.Syntax.Common
-import Agda.Syntax.Concrete.Name ( isNoName )
-import Agda.Syntax.Abstract.Name
-  ( ModuleName, QName,
-    mnameToList, qnameName, qnameModule, nameId, uglyShowName )
-import Agda.Syntax.Internal
-import Agda.Syntax.Literal ( Literal(..) )
-import qualified Agda.Syntax.Treeless as T
-
-import Agda.TypeChecking.Monad
-import Agda.TypeChecking.Reduce ( instantiateFull )
-import Agda.TypeChecking.Substitute as TC ( TelV(..), raise, subst )
-import Agda.TypeChecking.Pretty
-import Agda.TypeChecking.Telescope
-import Agda.TypeChecking.Primitive (getBuiltinName)
-
-import qualified Agda.Utils.List1 as List1
-import Agda.Utils.Maybe ( catMaybes, caseMaybeM )
-import Agda.Utils.Monad ( ifM, when )
-import Agda.Utils.Pretty (prettyShow, render)
-import Agda.Utils.IO.UTF8 ( writeFile )
-import Agda.Utils.Singleton ( singleton )
-
+import Agda.Compiler.Backend (Backend (..), Backend' (..), Recompile (..))
 import Agda.Compiler.Common
+import qualified Agda.Compiler.GoLang.Pretty as GoPretty
+import Agda.Compiler.GoLang.Syntax
+  ( Exp
+      ( BinOp,
+        Char,
+        Const,
+        Global,
+        GoCase,
+        GoCreateStruct,
+        GoFunction,
+        GoIf,
+        GoInterface,
+        GoLet,
+        GoMethodCall,
+        GoMethodCallParam,
+        GoStruct,
+        GoSwitch,
+        GoVar,
+        Integer,
+        Lambda,
+        Null,
+        ReturnExpression,
+        Self,
+        String,
+        Undefined
+      ),
+    GlobalId (GlobalId),
+    GoFunctionSignature (InnerSignature, OuterSignature),
+    GoImports
+      ( GoImportDeclarations,
+        GoImportField,
+        GoImportUsage
+      ),
+    GoQName,
+    MemberId (MemberId),
+    Module
+      ( Module,
+        modName
+      ),
+    TypeId
+      ( ConstructorType,
+        EmptyFunctionParameter,
+        EmptyType,
+        FunctionReturnElement,
+        FunctionType,
+        GenericFunctionType,
+        PiType,
+        TypeId
+      ),
+    modName,
+  )
 import Agda.Compiler.ToTreeless
 import Agda.Compiler.Treeless.EliminateDefaults
 import Agda.Compiler.Treeless.EliminateLiteralPatterns
+import Agda.Compiler.Treeless.Erase (computeErasedConstructorArgs)
 import Agda.Compiler.Treeless.GuardsToPrims
-import Agda.Compiler.Treeless.Erase ( computeErasedConstructorArgs )
-import Agda.Compiler.Backend (Backend(..), Backend'(..), Recompile(..))
-
-import Agda.Compiler.GoLang.Syntax
-  (GoQName,
-   Exp(Self,
-  Global,
-  Undefined,
-  Null,
-  String,
-  Char,
-  Integer,
-  GoInterface,
-  GoStruct,
-  Lambda,
-  GoFunction,
-   GoSwitch,
-   GoIf,
-   GoCase,
-   GoCreateStruct,
-   Const,
-   GoMethodCall,
-   GoVar,
-   GoLet,
-   BinOp,
-   ReturnExpression,
-   GoMethodCallParam),
-
-     GlobalId(GlobalId),
-     MemberId(MemberId),
-     GoImports(GoImportUsage,
-     GoImportField,
-     GoImportDeclarations),
-     Module(Module,
-     modName),
-     TypeId(TypeId,
-     ConstructorType, GenericFunctionType, EmptyType, EmptyFunctionParameter, FunctionType, FunctionReturnElement, PiType), GoFunctionSignature(OuterSignature, InnerSignature),
-    modName
+import Agda.Interaction.Options
+import Agda.Syntax.Abstract.Name
+  ( ModuleName,
+    QName,
+    mnameToList,
+    nameId,
+    qnameModule,
+    qnameName,
+    uglyShowName,
   )
-  
-import qualified Agda.Compiler.GoLang.Pretty as GoPretty
-
+import Agda.Syntax.Common
+import Agda.Syntax.Concrete.Name (isNoName)
+import Agda.Syntax.Internal
+import Agda.Syntax.Literal (Literal (..))
+import qualified Agda.Syntax.Treeless as T
+import Agda.TypeChecking.Monad
+import Agda.TypeChecking.Pretty
+import Agda.TypeChecking.Primitive (getBuiltinName)
+import Agda.TypeChecking.Reduce (instantiateFull)
+import Agda.TypeChecking.Substitute as TC (TelV (..), raise, subst)
+import Agda.TypeChecking.Telescope
+import Agda.Utils.FileName (isNewerThan)
+import Agda.Utils.IO.UTF8 (writeFile)
 import Agda.Utils.Impossible (__IMPOSSIBLE__)
+import qualified Agda.Utils.List1 as List1
+import Agda.Utils.Maybe (caseMaybeM, catMaybes)
+import Agda.Utils.Monad (ifM, when)
+import Agda.Utils.Pretty (prettyShow, render)
+import Agda.Utils.Singleton (singleton)
+import Control.DeepSeq
+import Control.Monad (zipWithM)
+import Control.Monad.Trans
+import Data.Char (chr, isAsciiUpper, isDigit, isLetter, isSpace, ord)
+import Data.Foldable (forM_)
+import Data.List (intercalate)
+import qualified Data.Map as Map
+import Data.Maybe (fromMaybe)
+import Data.Set (Set)
+import qualified Data.Set as Set
+import GHC.Generics (Generic)
+import System.Directory (createDirectoryIfMissing, getHomeDirectory, setCurrentDirectory)
+import System.FilePath (splitFileName, (</>))
+import Prelude hiding (writeFile)
 
 --------------------------------------------------
 -- Entry point into the compiler
@@ -106,66 +113,67 @@ goBackend :: Backend
 goBackend = Backend goBackend'
 
 goBackend' :: Backend' GoOptions GoOptions GoModuleEnv Module (Maybe Exp)
-goBackend' = Backend'
-  { backendName           = goBackendName
-  , backendVersion        = Nothing
-  , options               = defaultGoOptions
-  , commandLineFlags      = goCommandLineFlags
-  , isEnabled             = optGoCompile
-  , preCompile            = goPreCompile
-  , postCompile           = goPostCompile
-  , preModule             = goPreModule
-  , postModule            = goPostModule
-  , compileDef            = goCompileDef
-  , scopeCheckingSuffices = False
-  , mayEraseType          = const $ return False
+goBackend' =
+  Backend'
+    { backendName = goBackendName,
+      backendVersion = Nothing,
+      options = defaultGoOptions,
+      commandLineFlags = goCommandLineFlags,
+      isEnabled = optGoCompile,
+      preCompile = goPreCompile,
+      postCompile = goPostCompile,
+      preModule = goPreModule,
+      postModule = goPostModule,
+      compileDef = goCompileDef,
+      scopeCheckingSuffices = False,
+      mayEraseType = const $ return False
       -- Andreas, 2019-05-09, see issue #3732.
       -- If you want to use Go data structures generated from Agda
       -- @data@/@record@, you might want to tell the treeless compiler
       -- not to erase these types even if they have no content,
       -- to get a stable interface.
-  }
+    }
 
 --- Options ---
 
 data GoOptions = GoOptions
-  { optGoCompile  :: Bool
-  , optGoOptimize :: Bool
-  , optGoMinify   :: Bool
-      -- ^ Remove spaces etc. See https://en.wikipedia.org/wiki/Minification_(programming).
-  , optGoVerify   :: Bool
-      -- ^ Run generated code through interpreter.
-  , optGoTransform   :: Bool    
+  { optGoCompile :: Bool,
+    optGoOptimize :: Bool,
+    -- | Remove spaces etc. See https://en.wikipedia.org/wiki/Minification_(programming).
+    optGoMinify :: Bool,
+    -- | Run generated code through interpreter.
+    optGoVerify :: Bool,
+    optGoTransform :: Bool
   }
-  deriving Generic
-
+  deriving (Generic)
 
 instance NFData GoOptions
 
 defaultGoOptions :: GoOptions
-defaultGoOptions = GoOptions
-  { optGoCompile  = False
-  , optGoOptimize = False
-  , optGoMinify   = False
-  , optGoVerify   = False
-  , optGoTransform = False
-  }
+defaultGoOptions =
+  GoOptions
+    { optGoCompile = False,
+      optGoOptimize = False,
+      optGoMinify = False,
+      optGoVerify = False,
+      optGoTransform = False
+    }
 
 goCommandLineFlags :: [OptDescr (Flag GoOptions)]
 goCommandLineFlags =
-    [ Option [] ["go"] (NoArg enable) "compile program using the go backend"
-    , Option [] ["go-optimize"] (NoArg enableOpt) "turn on optimizations during Go code generation"
+  [ Option [] ["go"] (NoArg enable) "compile program using the go backend",
+    Option [] ["go-optimize"] (NoArg enableOpt) "turn on optimizations during Go code generation",
     -- Minification is described at https://en.wikipedia.org/wiki/Minification_(programming)
-    , Option [] ["go-minify"] (NoArg enableMin) "minify generated Go code"
-    , Option [] ["go-verify"] (NoArg enableVerify) "except for main module, run generated Go modules through `node` (needs to be in PATH)"
-    , Option [] ["go-transform"] (NoArg enableGoTransform) "transform go to go2"
-    ]
+    Option [] ["go-minify"] (NoArg enableMin) "minify generated Go code",
+    Option [] ["go-verify"] (NoArg enableVerify) "except for main module, run generated Go modules through `node` (needs to be in PATH)",
+    Option [] ["go-transform"] (NoArg enableGoTransform) "transform go to go2"
+  ]
   where
-    enable       o = pure o{ optGoCompile  = True }
-    enableOpt    o = pure o{ optGoOptimize = True }
-    enableMin    o = pure o{ optGoMinify   = True }
-    enableVerify o = pure o{ optGoVerify   = True }
-    enableGoTransform o = pure o{ optGoTransform   = True }
+    enable o = pure o {optGoCompile = True}
+    enableOpt o = pure o {optGoOptimize = True}
+    enableMin o = pure o {optGoMinify = True}
+    enableVerify o = pure o {optGoVerify = True}
+    enableGoTransform o = pure o {optGoTransform = True}
 
 --- Top-level compilation ---
 
@@ -173,20 +181,19 @@ goPreCompile :: GoOptions -> TCM GoOptions
 goPreCompile opts = return opts
 
 -- | After all modules have been compiled, copy RTE modules and verify compiled modules.
-
 goPostCompile :: GoOptions -> IsMain -> Map.Map ModuleName Module -> TCM ()
 goPostCompile opts _ ms = do
   reportSDoc "function.go" 6 $ " ms:" <+> (text . show) ms
-  forM_ ms $ \ Module{ modName } -> do
+  forM_ ms $ \Module {modName} -> do
     mdir <- compileDir
     liftIO $ setCurrentDirectory mdir
     reportSDoc "function.go" 5 $ " mdir:" <+> (text . show) mdir
     reportSDoc "function.go" 5 $ " goFile:" <+> (text . show) (goFileName modName)
 
-    -- str <- liftIO getHomeDirectory
-    -- reportSDoc "YAYAYAY" 5 $ (text . show) str 
-    -- let comm = unwords [ "go", "tool", "translate", (go2goFilePath modName) ]
-    -- liftIO $ callCommand comm
+-- str <- liftIO getHomeDirectory
+-- reportSDoc "YAYAYAY" 5 $ (text . show) str
+-- let comm = unwords [ "go", "tool", "translate", (go2goFilePath modName) ]
+-- liftIO $ callCommand comm
 --- Module compilation ---
 
 type GoModuleEnv = Maybe CoinductionKit
@@ -200,25 +207,25 @@ goPreModule _opts _ m ifile = ifM uptodate noComp yesComp
     ifileDesc = fromMaybe "(memory)" ifile
 
     noComp = do
-      m   <- prettyShow <$> curMName
+      m <- prettyShow <$> curMName
       out <- outFile_
       reportSLn "compile.go" 2 . (++ " : no compilation is needed.") . prettyShow =<< curMName
       Recompile <$> coinductionKit
 
     yesComp = do
-      m   <- prettyShow <$> curMName
+      m <- prettyShow <$> curMName
       out <- outFile_
       reportSLn "compile.go" 1 $ repl [m, ifileDesc, out] "Compiling go <<0>> in <<1>> to <<2>>"
       Recompile <$> coinductionKit
 
 goPostModule :: GoOptions -> GoModuleEnv -> IsMain -> ModuleName -> [Maybe Exp] -> TCM Module
 goPostModule opts _ isMain _ defs = do
-  m             <- goMod <$> curMName
-  is            <- map (goMod . fst) . iImportedModules <$> curIF
+  m <- goMod <$> curMName
+  is <- map (goMod . fst) . iImportedModules <$> curIF
   reportSDoc "function.go" 10 $ "\n m:" <+> (text . show) m
   reportSDoc "function.go" 10 $ "\n is:" <+> (text . show) is
   let importDeclarations = GoImportDeclarations $ (map goImportDecl is) ++ ["math/big", "helper"]
-  let importUsages = (map goImportUsg is) ++ [(GoImportUsage "big"), (GoImportUsage "helper")] 
+  let importUsages = (map goImportUsg is) ++ [(GoImportUsage "big"), (GoImportUsage "helper")]
   let mod = Module m (importDeclarations : ([GoImportField] ++ importUsages)) es
 
   writeModule mod
@@ -226,21 +233,21 @@ goPostModule opts _ isMain _ defs = do
   when (optGoTransform opts) $ do
     liftIO $ setCurrentDirectory mdir
     reportSDoc "function.go" 5 $ " mdir:" <+> (text . show) mdir
-      
-    -- str <- liftIO getHomeDirectory
-    -- reportSDoc "YAYAYAY" 5 $ (text . show) str 
 
-    -- let comm = unwords [ "go", "tool", "translate", (go2goFilePath m) ]
-    -- reportSDoc "function.go" 6 $ "\n cmd:" <+> (text . show) comm
-    -- liftIO $ callCommand comm
+  -- str <- liftIO getHomeDirectory
+  -- reportSDoc "YAYAYAY" 5 $ (text . show) str
+
+  -- let comm = unwords [ "go", "tool", "translate", (go2goFilePath m) ]
+  -- reportSDoc "function.go" 6 $ "\n cmd:" <+> (text . show) comm
+  -- liftIO $ callCommand comm
   return mod
   where
-  es       = catMaybes defs
-  main     = MemberId "main"
-  -- Andreas, 2020-10-27, only add invocation of "main" if such function is defined.
-  -- This allows loading of generated .go files into an interpreter
-  -- even if they do not define "main".
+    es = catMaybes defs
+    main = MemberId "main"
 
+-- Andreas, 2020-10-27, only add invocation of "main" if such function is defined.
+-- This allows loading of generated .go files into an interpreter
+-- even if they do not define "main".
 
 goCompileDef :: GoOptions -> GoModuleEnv -> IsMain -> Definition -> TCM (Maybe Exp)
 goCompileDef opts kit _isMain def = definition (opts, kit) (defName def, def)
@@ -256,7 +263,7 @@ goMod :: ModuleName -> GlobalId
 goMod m = GlobalId (prefix : map prettyShow (mnameToList m))
 
 goFileName :: GlobalId -> String
-goFileName (GlobalId ms) =  "go/src/Gopiler/" ++ (intercalate "/" (tail (init ms))) ++ (goFileName' (tail (init ms))) ++ (intercalate "_" (tail ms)) ++ "/" ++ (intercalate "_" (tail ms) ++ ".go")
+goFileName (GlobalId ms) = "go/src/Gopiler/" ++ (intercalate "/" (tail (init ms))) ++ (goFileName' (tail (init ms))) ++ (intercalate "_" (tail ms)) ++ "/" ++ (intercalate "_" (tail ms) ++ ".go")
 
 goFileName' :: [String] -> String
 goFileName' = \case
@@ -278,18 +285,17 @@ goMember n
   -- and they're all given the concrete name "_",
   -- so we disambiguate them using their name id.
   | isNoName n = MemberId ("_" ++ show (nameId n))
-  | otherwise  = MemberId $ prettyShow n
+  | otherwise = MemberId $ prettyShow n
 
 global' :: QName -> TCM (Exp, GoQName)
 global' q = do
   i <- iModuleName <$> curIF
   modNm <- topLevelModuleName (qnameModule q)
-  let
-    -- Global module prefix
-    qms = mnameToList $ qnameModule q
-    -- File-local module prefix
-    localms = drop (length $ mnameToList modNm) qms
-    nm = fmap goMember $ List1.snoc localms $ qnameName q
+  let -- Global module prefix
+      qms = mnameToList $ qnameModule q
+      -- File-local module prefix
+      localms = drop (length $ mnameToList modNm) qms
+      nm = fmap goMember $ List1.snoc localms $ qnameName q
   if modNm == i
     then return (Self, nm)
     else return (Global (goMod modNm), nm)
@@ -298,7 +304,7 @@ global :: QName -> TCM (Exp, GoQName)
 global q = do
   d <- getConstInfo q
   case d of
-    Defn { theDef = Constructor { conData = p } } -> do
+    Defn {theDef = Constructor {conData = p}} -> do
       getConstInfo p >>= \case
         -- Andreas, 2020-10-27, comment quotes outdated fact.
         -- anon. constructors are now M.R.constructor.
@@ -311,8 +317,8 @@ global q = do
         -- -- is given the name M.R.C, sigh. This causes a lot of hoop-jumping
         -- -- in the map from Agda names to Go names, which we patch by renaming
         -- -- anonymous constructors to M.R.record.
-        Defn { theDef = Record { recNamedCon = False } } -> do
-          (m,ls) <- global' p
+        Defn {theDef = Record {recNamedCon = False}} -> do
+          (m, ls) <- global' p
           return (m, ls <> singleton (MemberId "record"))
         _ -> global' (defName d)
     _ -> global' (defName d)
@@ -323,10 +329,10 @@ global q = do
 
 type EnvWithOpts = (GoOptions, GoModuleEnv)
 
-definition :: EnvWithOpts -> (QName,Definition) -> TCM (Maybe Exp)
-definition kit (q,d) = do
+definition :: EnvWithOpts -> (QName, Definition) -> TCM (Maybe Exp)
+definition kit (q, d) = do
   reportSDoc "compile.go" 10 $ "compiling def:" <+> prettyTCM q
-  (_,ls) <- global q
+  (_, ls) <- global q
   d <- instantiateFull d
 
   definition' kit q d (defType d) ls
@@ -335,10 +341,10 @@ defGoDef :: Definition -> Maybe String
 defGoDef def =
   case defCompilerPragmas goBackendName def of
     [CompilerPragma _ s] -> Just (dropEquals s)
-    []                   -> Nothing
-    _:_:_                -> __IMPOSSIBLE__
+    [] -> Nothing
+    _ : _ : _ -> __IMPOSSIBLE__
   where
-    dropEquals = dropWhile $ \ c -> isSpace c || c == '='
+    dropEquals = dropWhile $ \c -> isSpace c || c == '='
 
 ftype :: TypeId -> TypeId
 ftype (ConstructorType v t) = FunctionType v t
@@ -352,7 +358,7 @@ fReturnTypes ((ConstructorType v t) : tail) = (FunctionReturnElement t) : (fRetu
 fReturnTypes (head : tail) = EmptyType : (fReturnTypes tail)
 fReturnTypes [] = []
 
-createSignature :: MemberId -> [TypeId] -> String -> [String] -> TCM (Exp -> Exp) 
+createSignature :: MemberId -> [TypeId] -> String -> [String] -> TCM (Exp -> Exp)
 createSignature fname [] resName genTypes = do
   return $ GoFunction [(OuterSignature fname genTypes EmptyFunctionParameter [] (TypeId resName))]
 createSignature fname (firstArg : tail) resName genTypes = do
@@ -369,11 +375,11 @@ countFalses (_ : xs) = countFalses xs
 
 extractReturnType :: Exp -> TCM TypeId
 extractReturnType (GoFunction signatures _) = extractReturnType' $ head signatures
-extractReturnType _ = __IMPOSSIBLE__  
+extractReturnType _ = __IMPOSSIBLE__
 
 extractReturnType' :: GoFunctionSignature -> TCM TypeId
 extractReturnType' (OuterSignature _ _ _ _ retType) = return retType
-extractReturnType' _ = __IMPOSSIBLE__  
+extractReturnType' _ = __IMPOSSIBLE__
 
 retrieveGenericArguments :: [TypeId] -> [String]
 retrieveGenericArguments [] = []
@@ -385,31 +391,30 @@ definition' :: EnvWithOpts -> QName -> Definition -> Type -> GoQName -> TCM (May
 definition' kit q d t ls = do
   case theDef d of
     -- coinduction
-    Constructor{} | Just q == (nameOfSharp <$> snd kit) -> do
+    Constructor {} | Just q == (nameOfSharp <$> snd kit) -> do
       reportSDoc "compile.go" 30 $ " con1:" <+> (text . show) d
       return Nothing
-    Function{} | Just q == (nameOfFlat <$> snd kit) -> do
+    Function {} | Just q == (nameOfFlat <$> snd kit) -> do
       reportSDoc "compile.go" 30 $ " f1:" <+> (text . show) d
       return Nothing
-    DataOrRecSig{} -> __IMPOSSIBLE__
-    Axiom{} -> return Nothing
-
-    GeneralizableVar{} -> return Nothing
-    PrimitiveSort{} -> return Nothing
-
-    Function{} | otherwise -> do
+    DataOrRecSig {} -> __IMPOSSIBLE__
+    Axiom {} -> return Nothing
+    GeneralizableVar {} -> return Nothing
+    PrimitiveSort {} -> return Nothing
+    Function {} | otherwise -> do
       reportSDoc "function.go" 5 $ "compiling fun:" <+> prettyTCM q
       fname <- liftTCM $ fullName q
-      caseMaybeM (toTreeless T.EagerEvaluation q) (pure Nothing) $ \ treeless -> do
+      caseMaybeM (toTreeless T.EagerEvaluation q) (pure Nothing) $ \treeless -> do
         used <- fromMaybe [] <$> getCompiledArgUse q
-        funBody <- eliminateCaseDefaults =<<
-          eliminateLiteralPatterns
-          (convertGuards treeless)
+        funBody <-
+          eliminateCaseDefaults
+            =<< eliminateLiteralPatterns
+              (convertGuards treeless)
         (goArg, (ConstructorType _ name)) <- goTelApproximationFunction t used
-        let count = countFalses used 
+        let count = countFalses used
         let genericTypesUsed = retrieveGenericArguments goArg
         reportSDoc "function.go" 30 $ " genericTypesUsed:" <+> (text . show) genericTypesUsed
-        reportSDoc "function.go" 30 $ " compiled treeless fun:" <+> pretty funBody 
+        reportSDoc "function.go" 30 $ " compiled treeless fun:" <+> pretty funBody
         (TelV tel res) <- telView t
         let args = map (snd . unDom) (telToList tel)
         reportSDoc "function.go" 30 $ " goArg:" <+> (text . show) goArg
@@ -418,40 +423,41 @@ definition' kit q d t ls = do
         let (body, given) = lamView funBody
               where
                 lamView :: T.TTerm -> (T.TTerm, Int)
-                lamView (T.TLam t) = (+1) <$> lamView t
+                lamView (T.TLam t) = (+ 1) <$> lamView t
                 lamView t = (t, 0)
 
             etaN = length $ dropWhile (== T.ArgUsed) $ reverse $ drop given used
 
-        funBody' <- compileTerm kit ((length goArg) - 1) goArg
-            $ T.mkTApp (TC.raise etaN body) (T.TVar <$> [etaN-1, etaN-2 .. 0])
+        funBody' <-
+          compileTerm kit ((length goArg) - 1) goArg $
+            T.mkTApp (TC.raise etaN body) (T.TVar <$> [etaN -1, etaN -2 .. 0])
 
         functionSignature <- createSignature fname goArg name genericTypesUsed
         let emptyFunction = functionSignature Null
         returnType <- extractReturnType emptyFunction
-        reportSDoc "function.go" 25 $ "\n functionSignature:" <+> (text . show) functionSignature 
-        reportSDoc "function.go" 25 $ "\n funBody':" <+> (text . show) funBody'   
+        reportSDoc "function.go" 25 $ "\n functionSignature:" <+> (text . show) functionSignature
+        reportSDoc "function.go" 25 $ "\n funBody':" <+> (text . show) funBody'
         reportSDoc "function.go" 30 $ "\n given:" <+> (text . show) given
         reportSDoc "function.go" 30 $ "\n etaN:" <+> (text . show) etaN
-        return $ Just $ applyReturnType returnType (functionSignature funBody') 
-    Primitive{primName = p} -> return Nothing
-    Datatype{ dataPathCons = _ : _ } -> do
+        return $ Just $ applyReturnType returnType (functionSignature funBody')
+    Primitive {primName = p} -> return Nothing
+    Datatype {dataPathCons = _ : _} -> do
       reportSDoc "compile.go" 30 $ " data tupe:" <+> (text . show) q
       s <- render <$> prettyTCM q
-      typeError $ NotImplemented $
-        "Higher inductive types (" ++ s ++ ")"
-    Datatype{} -> do
+      typeError $
+        NotImplemented $
+          "Higher inductive types (" ++ s ++ ")"
+    Datatype {} -> do
       reportSDoc "compile.go" 40 $ " data tupe2:" <+> (text . show) d
       let nameee = uglyShowName (qnameName q)
       reportSDoc "compile.go" 30 $ "\n nameee:" <+> (text . show) nameee
       computeErasedConstructorArgs q
       name <- liftTCM $ fullName q
       return (Just $ GoInterface $ name)
-    Record{} -> do
-        computeErasedConstructorArgs q
-        return Nothing
-
-    c@Constructor{conData = p, conPars = nc, conSrcCon = ch, conArity = cona} -> do
+    Record {} -> do
+      computeErasedConstructorArgs q
+      return Nothing
+    c@Constructor {conData = p, conPars = nc, conSrcCon = ch, conArity = cona} -> do
       (ff, gg) <- global q
       (ff2, gg2) <- global' q
       reportSDoc "compile.go" 5 $ "compiling gg2:" <+> (text . show) gg2
@@ -465,19 +471,20 @@ definition' kit q d t ls = do
       reportSDoc "compile.go" 20 $ " goTypes:" <+> (text . show) goArg
       case theDef d of
         dt -> return (Just $ GoStruct constName goArg)
-    AbstractDefn{} -> __IMPOSSIBLE__
+    AbstractDefn {} -> __IMPOSSIBLE__
+
 --------------------------------------------------
 -- Writing out a Golang module
 --------------------------------------------------
 
 fullName :: QName -> TCM MemberId
 fullName q = do
-  (m,ls) <- global q
-  case m of 
+  (m, ls) <- global q
+  case m of
     Self -> return $ MemberId $ encode $ constructorName' ls
     Global (GlobalId id) -> do
       return $ MemberId $ (intercalate "_" (tail id)) ++ "." ++ (encode $ constructorName' ls)
-    _ -> __IMPOSSIBLE__  
+    _ -> __IMPOSSIBLE__
 
 encode :: [Char] -> String
 encode [] = []
@@ -497,7 +504,7 @@ encodeChar c = do
     False -> "u" ++ (show (ord c))
 
 isValidChar :: Char -> Bool
-isValidChar c = (isLetter c) || ('_' == c) || (isDigit c) 
+isValidChar c = (isLetter c) || ('_' == c) || (isDigit c)
 
 constructorName' :: GoQName -> String
 constructorName' s = do
@@ -529,8 +536,8 @@ filterErased = \case
   _ -> True
 
 getPiTypedMethodParams :: TypeId -> [Exp] -> Exp
-getPiTypedMethodParams (PiType (ConstructorType name typeId) _ ) (exp : _) = GoMethodCallParam exp (TypeId typeId)
-getPiTypedMethodParams (PiType (GenericFunctionType name typeId) _ ) (exp : _) = GoMethodCallParam exp (TypeId typeId)
+getPiTypedMethodParams (PiType (ConstructorType name typeId) _) (exp : _) = GoMethodCallParam exp (TypeId typeId)
+getPiTypedMethodParams (PiType (GenericFunctionType name typeId) _) (exp : _) = GoMethodCallParam exp (TypeId typeId)
 getPiTypedMethodParams _ _ = __IMPOSSIBLE__
 
 getTypelessMethodCallParams :: [Exp] -> [Exp]
@@ -571,27 +578,25 @@ compileTerm kit paramCount args t = do
         name <- liftTCM $ fullName q
         transformedArgs <- mapM go (filter filterErased x)
         return $ GoMethodCall name (getTypelessMethodCallParams transformedArgs)
-      T.TApp (T.TVar v1) x  -> do
+      T.TApp (T.TVar v1) x -> do
         reportSDoc "function.go" 30 $ "function var function"
         transformedArgs <- mapM go (filter filterErased x)
         let typedMethodParam = getPiTypedMethodParams (args !! (paramCount - v1)) transformedArgs
-        return $ GoMethodCall (MemberId (getVarName (paramCount - v1))) [typedMethodParam]  
-      T.TApp (T.TPrim T.PIf) [c, x, y]  -> do
+        return $ GoMethodCall (MemberId (getVarName (paramCount - v1))) [typedMethodParam]
+      T.TApp (T.TPrim T.PIf) [c, x, y] -> do
         GoIf <$> (go c) <*> (go x) <*> (go y)
-      T.TApp (T.TPrim primType) [x, y]  -> do
-        BinOp <$> (go (T.TPrim primType)) <*> (go x)  <*> (go y) 
-
+      T.TApp (T.TPrim primType) [x, y] -> do
+        BinOp <$> (go (T.TPrim primType)) <*> (go x) <*> (go y)
       T.TApp t' xs | Just f <- getDef t' -> do
         used <- case f of
-          Left  q -> fromMaybe [] <$> getCompiledArgUse q
-          Right c -> map (\b -> if b then T.ArgUnused else T.ArgUsed) <$> getErasedConArgs c        
+          Left q -> fromMaybe [] <$> getCompiledArgUse q
+          Right c -> map (\b -> if b then T.ArgUnused else T.ArgUsed) <$> getErasedConArgs c
         -- either getCompiledArgUse (\x -> fmap (map (\b -> if b then T.ArgUnused else T.ArgUsed)) $ getErasedConArgs x) f
 
         reportSDoc "function.go" 30 $ "\n just f used:" <+> (text . show) used
         reportSDoc "function.go" 30 $ "\n just f:" <+> (text . show) (getDef t')
         reportSDoc "function.go" 30 $ "\n TApp xs:" <+> (text . show) xs
         unit
-
       T.TApp t xs -> do
         reportSDoc "function.go" 30 $ "\n TApp xs:" <+> (text . show) xs
         unit
@@ -600,7 +605,7 @@ compileTerm kit paramCount args t = do
       T.TLet varDef nextExp -> do
         GoLet <$> (return (getVarName (paramCount + 1))) <*> (go varDef) <*> (compileTerm kit (paramCount + 1) args nextExp)
       T.TLit l -> do
-        reportSDoc "function.go" 30 $ "\n TLit l:" <+> (text . show) l 
+        reportSDoc "function.go" 30 $ "\n TLit l:" <+> (text . show) l
         return $ literal l
       T.TCon q -> do
         d <- getConstInfo q
@@ -612,7 +617,7 @@ compileTerm kit paramCount args t = do
         return $ GoSwitch (GoVar (paramCount - sc)) cases
       T.TCase _ _ _ _ -> __IMPOSSIBLE__
       T.TPrim p -> do
-        reportSDoc "function.go" 30 $ "\n prim:" <+> (text . show) p 
+        reportSDoc "function.go" 30 $ "\n prim:" <+> (text . show) p
         return $ compilePrim p
       T.TUnit -> unit
       T.TSort -> unit
@@ -629,8 +634,8 @@ compileTerm kit paramCount args t = do
 
 eraseLocalVars :: [Bool] -> T.TTerm -> T.TTerm
 eraseLocalVars [] x = x
-eraseLocalVars (False: es) x = eraseLocalVars es x
-eraseLocalVars (True: es) x = eraseLocalVars es (TC.subst (length es) T.TErased x)
+eraseLocalVars (False : es) x = eraseLocalVars es x
+eraseLocalVars (True : es) x = eraseLocalVars es (TC.subst (length es) T.TErased x)
 
 writeModule :: Module -> TCM ()
 writeModule m = do
@@ -644,16 +649,16 @@ outFile m = do
   mdir <- compileDir
   let (fdir, fn) = splitFileName (goFileName m)
   let dir = mdir </> fdir
-      fp  = dir </> fn
-  reportSDoc "function.go" 5 $ " dir o:" <+> (text . show) dir    
+      fp = dir </> fn
+  reportSDoc "function.go" 5 $ " dir o:" <+> (text . show) dir
   liftIO $ createDirectoryIfMissing True dir
   return fp
 
 goTypeApproximation :: Int -> Type -> TCM TypeId
 goTypeApproximation fv t = do
   let go n t = do
-        int  <- getBuiltinName builtinInteger
-        nat  <- getBuiltinName builtinNat
+        int <- getBuiltinName builtinInteger
+        nat <- getBuiltinName builtinNat
         let tu = unSpine t
         let is q b = Just q == b
         case tu of
@@ -664,22 +669,23 @@ goTypeApproximation fv t = do
             reportSDoc "function.go" 10 $ "in p1: :" <+> (text . show) p1
             reportSDoc "function.go" 10 $ "in p2: :" <+> (text . show) p2
             return $ PiType p1 p2
-            where k = case b of Abs{} -> 1; NoAbs{} -> 0
+            where
+              k = case b of Abs {} -> 1; NoAbs {} -> 0
           Def q els
             | q `is` int -> return $ ConstructorType (getVarName n) "*big.Int"
             | q `is` nat -> return $ ConstructorType (getVarName n) "*big.Int"
             | otherwise -> do
               (MemberId name) <- liftTCM $ fullName q
               return $ ConstructorType (getVarName n) name
-          Sort{} -> return EmptyType
+          Sort {} -> return EmptyType
           _ -> return $ ConstructorType (getVarName n) "interface{}"
   go fv (unEl t)
 
 goTypeApproximationF :: Int -> Type -> TCM TypeId
 goTypeApproximationF fv t = do
   let go n t = do
-        int  <- getBuiltinName builtinInteger
-        nat  <- getBuiltinName builtinNat
+        int <- getBuiltinName builtinInteger
+        nat <- getBuiltinName builtinNat
         let tu = unSpine t
         let is q b = Just q == b
         case tu of
@@ -690,14 +696,15 @@ goTypeApproximationF fv t = do
             reportSDoc "function.go" 10 $ "in p1: :" <+> (text . show) p1
             reportSDoc "function.go" 10 $ "in p2: :" <+> (text . show) p2
             return $ PiType p1 p2
-            where k = case b of Abs{} -> 1; NoAbs{} -> 0
+            where
+              k = case b of Abs {} -> 1; NoAbs {} -> 0
           Def q els
             | q `is` int -> return $ ConstructorType (getVarName n) "*big.Int"
             | q `is` nat -> return $ ConstructorType (getVarName n) "*big.Int"
             | otherwise -> do
               (MemberId name) <- liftTCM $ fullName q
               return $ ConstructorType (getVarName n) name
-          Sort{} -> return EmptyType
+          Sort {} -> return EmptyType
           Var varN [] -> return $ GenericFunctionType (getVarName n) ("T" ++ (show varN))
           _ -> return $ ConstructorType (getVarName n) "interface{}"
   go fv (unEl t)
@@ -705,8 +712,8 @@ goTypeApproximationF fv t = do
 goTypeApproximation' :: Int -> Type -> TCM TypeId
 goTypeApproximation' fv t = do
   let go n t = do
-        int  <- getBuiltinName builtinInteger
-        nat  <- getBuiltinName builtinNat
+        int <- getBuiltinName builtinInteger
+        nat <- getBuiltinName builtinNat
         let tu = unSpine t
         let is q b = Just q == b
         case tu of
@@ -717,22 +724,23 @@ goTypeApproximation' fv t = do
             reportSDoc "function.go" 10 $ "in p1: :" <+> (text . show) p1
             reportSDoc "function.go" 10 $ "in p2: :" <+> (text . show) p2
             return $ PiType p1 p2
-            where k = case b of Abs{} -> 1; NoAbs{} -> 0
+            where
+              k = case b of Abs {} -> 1; NoAbs {} -> 0
           Def q els
             | q `is` int -> return $ ConstructorType (getVarName n) "interface{}"
             | q `is` nat -> return $ ConstructorType (getVarName n) "interface{}"
             | otherwise -> do
               (MemberId name) <- liftTCM $ fullName q
               return $ ConstructorType (getVarName n) name
-          Sort{} -> return EmptyType
+          Sort {} -> return EmptyType
           _ -> return $ ConstructorType (getVarName n) "interface{}"
   go fv (unEl t)
 
 goTypeApproximationRet :: Int -> Type -> TCM TypeId
 goTypeApproximationRet fv t = do
   let go n t = do
-        int  <- getBuiltinName builtinInteger
-        nat  <- getBuiltinName builtinNat
+        int <- getBuiltinName builtinInteger
+        nat <- getBuiltinName builtinNat
         let tu = unSpine t
         let is q b = Just q == b
         case tu of
@@ -743,14 +751,15 @@ goTypeApproximationRet fv t = do
             reportSDoc "function.go" 10 $ "in p1: :" <+> (text . show) p1
             reportSDoc "function.go" 10 $ "in p2: :" <+> (text . show) p2
             return $ PiType p1 p2
-            where k = case b of Abs{} -> 1; NoAbs{} -> 0
+            where
+              k = case b of Abs {} -> 1; NoAbs {} -> 0
           Def q els
             | q `is` int -> return $ ConstructorType (getVarName n) "*big.Int"
             | q `is` nat -> return $ ConstructorType (getVarName n) "*big.Int"
             | otherwise -> do
               (MemberId name) <- liftTCM $ fullName q
               return $ ConstructorType (getVarName n) name
-          Sort{} -> return EmptyType
+          Sort {} -> return EmptyType
           _ -> return $ ConstructorType (getVarName n) "interface{}"
   go fv (unEl t)
 
@@ -763,7 +772,7 @@ goTelApproximation t erased = do
   reportSDoc "compile.go" 20 $ " len:" <+> (text . show) (length args)
   let filteredArgs = map2 erased $ filter isSortType args
   reportSDoc "compile.go" 20 $ " filteredArgs:" <+> (text . show) filteredArgs
-  (,) <$> zipWithM (goTypeApproximation) [0..] filteredArgs <*> goTypeApproximationRet (length args) res
+  (,) <$> zipWithM (goTypeApproximation) [0 ..] filteredArgs <*> goTypeApproximationRet (length args) res
 
 goTelApproximationFunction :: Type -> [T.ArgUsage] -> TCM ([TypeId], TypeId)
 goTelApproximationFunction t erased = do
@@ -773,20 +782,20 @@ goTelApproximationFunction t erased = do
   reportSDoc "function.go" 20 $ " res:" <+> (text . show) res
   reportSDoc "function.go" 20 $ " used:" <+> (text . show) erased
   reportSDoc "function.go" 20 $ " len:" <+> (text . show) (length args)
-  let filteredArgs = filter isSortType $ map2 erased args 
+  let filteredArgs = filter isSortType $ map2 erased args
   reportSDoc "function.go" 20 $ " filteredArgs:" <+> (text . show) filteredArgs
-  (,) <$> zipWithM (goTypeApproximation') [0..] filteredArgs <*> goTypeApproximationRet (length args) res  
+  (,) <$> zipWithM (goTypeApproximation') [0 ..] filteredArgs <*> goTypeApproximationRet (length args) res
 
 isSortType :: Type -> Bool
 isSortType t = do
   let tu = unSpine (unEl t)
   case tu of
-    Sort{} -> False
+    Sort {} -> False
     _ -> True
 
 applyReturnType :: TypeId -> Exp -> Exp
 applyReturnType retT exp = do
-  case exp of 
+  case exp of
     GoVar x -> ReturnExpression (GoVar x) retT
     GoMethodCall x y -> ReturnExpression (GoMethodCall x y) retT
     GoCreateStruct x y -> ReturnExpression (GoCreateStruct x y) retT
@@ -806,7 +815,6 @@ applyReturnType retT exp = do
     GoLet x y z -> GoLet x y (applyReturnType retT z)
     n -> n
 
-
 isLastExpression :: Exp -> Bool
 isLastExpression = \case
   GoMethodCall x y -> True
@@ -817,6 +825,7 @@ isLastExpression = \case
   Integer x -> True
   Const x -> True
   _ -> False
+
 outFile_ :: TCM FilePath
 outFile_ = do
   m <- curMName
@@ -824,13 +833,13 @@ outFile_ = do
 
 literal :: Literal -> Exp
 literal = \case
-  (LitNat    x) -> Integer x
+  (LitNat x) -> Integer x
   (LitWord64 x) -> __IMPOSSIBLE__
-  (LitFloat  x) -> __IMPOSSIBLE__
+  (LitFloat x) -> __IMPOSSIBLE__
   (LitString x) -> __IMPOSSIBLE__
-  (LitChar   x) -> __IMPOSSIBLE__
-  (LitQName  x) -> __IMPOSSIBLE__
-  LitMeta{}     -> __IMPOSSIBLE__
+  (LitChar x) -> __IMPOSSIBLE__
+  (LitQName x) -> __IMPOSSIBLE__
+  LitMeta {} -> __IMPOSSIBLE__
 
 compilePrim :: T.TPrim -> Exp
 compilePrim p =
@@ -852,13 +861,12 @@ compilePrim p =
     T.PAdd64 -> Const "helper.Add"
     T.PSub64 -> Const "helper.Minus"
     T.PMul64 -> Const "helper.Multiply"
-    T.PRem64 -> Const "PRem64" 
+    T.PRem64 -> Const "PRem64"
     T.PQuot64 -> Const "PQuot64"
     T.PITo64 -> Const "PITo64"
     T.P64ToI -> Const "P64ToI"
     T.PSeq -> Const "PSeq"
     T.PIf -> __IMPOSSIBLE__
-
 
 -- | Cubical primitives that are (currently) not compiled.
 --
@@ -869,155 +877,154 @@ compilePrim p =
 -- should be rejected are compiled to something which might not work
 -- as intended. A better approach might be to list exactly those
 -- primitives which should be compiled to 'Undefined'.
-
 cubicalPrimitives :: Set String
-cubicalPrimitives = Set.fromList
-  [ "primIMin"
-  , "primIMax"
-  , "primINeg"
-  , "primPartial"
-  , "primPartialP"
-  , "primPFrom1"
-  , "primPOr"
-  , "primComp"
-  , "primTransp"
-  , "primHComp"
-  , "primSubOut"
-  ]
+cubicalPrimitives =
+  Set.fromList
+    [ "primIMin",
+      "primIMax",
+      "primINeg",
+      "primPartial",
+      "primPartialP",
+      "primPFrom1",
+      "primPOr",
+      "primComp",
+      "primTransp",
+      "primHComp",
+      "primSubOut"
+    ]
 
 -- | Primitives implemented in the Go Agda RTS.
 primitives :: Set String
-primitives = Set.fromList
-  [  "primShowInteger"
+primitives =
+  Set.fromList
+    [ "primShowInteger",
+      -- Natural number functions
+      -- , "primNatPlus"                 -- missing
+      "primNatMinus",
+      -- , "primNatTimes"                -- missing
+      -- , "primNatDivSucAux"            -- missing
+      -- , "primNatModSucAux"            -- missing
+      -- , "primNatEquality"             -- missing
+      -- , "primNatLess"                 -- missing
+      -- , "primShowNat"                 -- missing
 
-  -- Natural number functions
-  -- , "primNatPlus"                 -- missing
-  , "primNatMinus"
-  -- , "primNatTimes"                -- missing
-  -- , "primNatDivSucAux"            -- missing
-  -- , "primNatModSucAux"            -- missing
-  -- , "primNatEquality"             -- missing
-  -- , "primNatLess"                 -- missing
-  -- , "primShowNat"                 -- missing
+      -- Machine words
+      "primWord64ToNat",
+      "primWord64FromNat",
+      -- , "primWord64ToNatInjective"    -- missing
 
-  -- Machine words
-  , "primWord64ToNat"
-  , "primWord64FromNat"
-  -- , "primWord64ToNatInjective"    -- missing
+      -- Level functions
+      -- , "primLevelZero"               -- missing
+      -- , "primLevelSuc"                -- missing
+      -- , "primLevelMax"                -- missing
 
-  -- Level functions
-  -- , "primLevelZero"               -- missing
-  -- , "primLevelSuc"                -- missing
-  -- , "primLevelMax"                -- missing
+      -- Sorts
+      -- , "primSetOmega"                -- missing
+      -- , "primStrictSetOmega"          -- missing
 
-  -- Sorts
-  -- , "primSetOmega"                -- missing
-  -- , "primStrictSetOmega"          -- missing
+      -- Floating point functions
+      "primFloatEquality",
+      "primFloatInequality",
+      "primFloatLess",
+      "primFloatIsInfinite",
+      "primFloatIsNaN",
+      "primFloatIsNegativeZero",
+      "primFloatIsSafeInteger",
+      "primFloatToWord64",
+      -- , "primFloatToWord64Injective"  -- missing
+      "primNatToFloat",
+      "primIntToFloat",
+      -- , "primFloatRound"              -- in Agda.Builtin.Float
+      -- , "primFloatFloor"              -- in Agda.Builtin.Float
+      -- , "primFloatCeiling"            -- in Agda.Builtin.Float
+      -- , "primFloatToRatio"            -- in Agda.Builtin.Float
+      "primRatioToFloat",
+      -- , "primFloatDecode"             -- in Agda.Builtin.Float
+      -- , "primFloatEncode"             -- in Agda.Builtin.Float
+      "primShowFloat",
+      "primFloatPlus",
+      "primFloatMinus",
+      "primFloatTimes",
+      "primFloatNegate",
+      "primFloatDiv",
+      "primFloatSqrt",
+      "primFloatExp",
+      "primFloatLog",
+      "primFloatSin",
+      "primFloatCos",
+      "primFloatTan",
+      "primFloatASin",
+      "primFloatACos",
+      "primFloatATan",
+      "primFloatATan2",
+      "primFloatSinh",
+      "primFloatCosh",
+      "primFloatTanh",
+      "primFloatASinh",
+      "primFloatACosh",
+      "primFloatATanh",
+      "primFloatPow",
+      -- Character functions
+      -- , "primCharEquality"            -- missing
+      -- , "primIsLower"                 -- missing
+      -- , "primIsDigit"                 -- missing
+      -- , "primIsAlpha"                 -- missing
+      -- , "primIsSpace"                 -- missing
+      -- , "primIsAscii"                 -- missing
+      -- , "primIsLatin1"                -- missing
+      -- , "primIsPrint"                 -- missing
+      -- , "primIsHexDigit"              -- missing
+      -- , "primToUpper"                 -- missing
+      -- , "primToLower"                 -- missing
+      -- , "primCharToNat"               -- missing
+      -- , "primCharToNatInjective"      -- missing
+      -- , "primNatToChar"               -- missing
+      -- , "primShowChar"                -- in Agda.Builtin.String
 
-  -- Floating point functions
-  , "primFloatEquality"
-  , "primFloatInequality"
-  , "primFloatLess"
-  , "primFloatIsInfinite"
-  , "primFloatIsNaN"
-  , "primFloatIsNegativeZero"
-  , "primFloatIsSafeInteger"
-  , "primFloatToWord64"
-  -- , "primFloatToWord64Injective"  -- missing
-  , "primNatToFloat"
-  , "primIntToFloat"
-  -- , "primFloatRound"              -- in Agda.Builtin.Float
-  -- , "primFloatFloor"              -- in Agda.Builtin.Float
-  -- , "primFloatCeiling"            -- in Agda.Builtin.Float
-  -- , "primFloatToRatio"            -- in Agda.Builtin.Float
-  , "primRatioToFloat"
-  -- , "primFloatDecode"             -- in Agda.Builtin.Float
-  -- , "primFloatEncode"             -- in Agda.Builtin.Float
-  , "primShowFloat"
-  , "primFloatPlus"
-  , "primFloatMinus"
-  , "primFloatTimes"
-  , "primFloatNegate"
-  , "primFloatDiv"
-  , "primFloatSqrt"
-  , "primFloatExp"
-  , "primFloatLog"
-  , "primFloatSin"
-  , "primFloatCos"
-  , "primFloatTan"
-  , "primFloatASin"
-  , "primFloatACos"
-  , "primFloatATan"
-  , "primFloatATan2"
-  , "primFloatSinh"
-  , "primFloatCosh"
-  , "primFloatTanh"
-  , "primFloatASinh"
-  , "primFloatACosh"
-  , "primFloatATanh"
-  , "primFloatPow"
+      -- String functions
+      -- , "primStringToList"            -- in Agda.Builtin.String
+      -- , "primStringToListInjective"   -- missing
+      -- , "primStringFromList"          -- in Agda.Builtin.String
+      -- , "primStringFromListInjective" -- missing
+      -- , "primStringAppend"            -- in Agda.Builtin.String
+      -- , "primStringEquality"          -- in Agda.Builtin.String
+      -- , "primShowString"              -- in Agda.Builtin.String
+      -- , "primStringUncons"            -- in Agda.Builtin.String
 
-  -- Character functions
-  -- , "primCharEquality"            -- missing
-  -- , "primIsLower"                 -- missing
-  -- , "primIsDigit"                 -- missing
-  -- , "primIsAlpha"                 -- missing
-  -- , "primIsSpace"                 -- missing
-  -- , "primIsAscii"                 -- missing
-  -- , "primIsLatin1"                -- missing
-  -- , "primIsPrint"                 -- missing
-  -- , "primIsHexDigit"              -- missing
-  -- , "primToUpper"                 -- missing
-  -- , "primToLower"                 -- missing
-  -- , "primCharToNat"               -- missing
-  -- , "primCharToNatInjective"      -- missing
-  -- , "primNatToChar"               -- missing
-  -- , "primShowChar"                -- in Agda.Builtin.String
-
-  -- String functions
-  -- , "primStringToList"            -- in Agda.Builtin.String
-  -- , "primStringToListInjective"   -- missing
-  -- , "primStringFromList"          -- in Agda.Builtin.String
-  -- , "primStringFromListInjective" -- missing
-  -- , "primStringAppend"            -- in Agda.Builtin.String
-  -- , "primStringEquality"          -- in Agda.Builtin.String
-  -- , "primShowString"              -- in Agda.Builtin.String
-  -- , "primStringUncons"            -- in Agda.Builtin.String
-
-  -- Other stuff
-  -- , "primEraseEquality"           -- missing
-  -- , "primForce"                   -- missing
-  -- , "primForceLemma"              -- missing
-  , "primQNameEquality"
-  , "primQNameLess"
-  , "primShowQName"
-  , "primQNameFixity"
-  -- , "primQNameToWord64s"          -- missing
-  -- , "primQNameToWord64sInjective" -- missing
-  -- , "primMetaEquality"            -- missing
-  -- , "primMetaLess"                -- missing
-  -- , "primShowMeta"                -- missing
-  -- , "primMetaToNat"               -- missing
-  -- , "primMetaToNatInjective"      -- missing
-  -- , "primIMin"                    -- missing
-  -- , "primIMax"                    -- missing
-  -- , "primINeg"                    -- missing
-  -- , "primPOr"                     -- missing
-  -- , "primComp"                    -- missing
-  -- , builtinTrans                  -- missing
-  -- , builtinHComp                  -- missing
-  -- , "primIdJ"                     -- missing
-  -- , "primPartial"                 -- missing
-  -- , "primPartialP"                -- missing
-  -- , builtinGlue                   -- missing
-  -- , builtin_glue                  -- missing
-  -- , builtin_unglue                -- missing
-  -- , builtinFaceForall             -- missing
-  -- , "primDepIMin"                 -- missing
-  -- , "primIdFace"                  -- missing
-  -- , "primIdPath"                  -- missing
-  -- , builtinIdElim                 -- missing
-  -- , builtinSubOut                 -- missing
-  -- , builtin_glueU                 -- missing
-  -- , builtin_unglueU               -- missing
-  ]
+      -- Other stuff
+      -- , "primEraseEquality"           -- missing
+      -- , "primForce"                   -- missing
+      -- , "primForceLemma"              -- missing
+      "primQNameEquality",
+      "primQNameLess",
+      "primShowQName",
+      "primQNameFixity"
+      -- , "primQNameToWord64s"          -- missing
+      -- , "primQNameToWord64sInjective" -- missing
+      -- , "primMetaEquality"            -- missing
+      -- , "primMetaLess"                -- missing
+      -- , "primShowMeta"                -- missing
+      -- , "primMetaToNat"               -- missing
+      -- , "primMetaToNatInjective"      -- missing
+      -- , "primIMin"                    -- missing
+      -- , "primIMax"                    -- missing
+      -- , "primINeg"                    -- missing
+      -- , "primPOr"                     -- missing
+      -- , "primComp"                    -- missing
+      -- , builtinTrans                  -- missing
+      -- , builtinHComp                  -- missing
+      -- , "primIdJ"                     -- missing
+      -- , "primPartial"                 -- missing
+      -- , "primPartialP"                -- missing
+      -- , builtinGlue                   -- missing
+      -- , builtin_glue                  -- missing
+      -- , builtin_unglue                -- missing
+      -- , builtinFaceForall             -- missing
+      -- , "primDepIMin"                 -- missing
+      -- , "primIdFace"                  -- missing
+      -- , "primIdPath"                  -- missing
+      -- , builtinIdElim                 -- missing
+      -- , builtinSubOut                 -- missing
+      -- , builtin_glueU                 -- missing
+      -- , builtin_unglueU               -- missing
+    ]

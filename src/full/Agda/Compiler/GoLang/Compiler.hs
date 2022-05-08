@@ -20,7 +20,7 @@ import qualified Data.Text as T
 
 import GHC.Generics (Generic)
 
-import System.Directory   ( createDirectoryIfMissing, setCurrentDirectory  )
+import System.Directory   ( createDirectoryIfMissing, setCurrentDirectory, getHomeDirectory )
 import System.Environment ( setEnv )
 import System.FilePath    ( splitFileName, (</>) )
 import System.Process     ( callCommand )
@@ -167,9 +167,12 @@ goPostCompile opts _ ms = do
     mdir <- compileDir
     liftIO $ setCurrentDirectory mdir
     reportSDoc "function.go" 5 $ " mdir:" <+> (text . show) mdir
-    reportSDoc "function.go" 5 $ " goFile:" <+> (text . show) (go2goFilePath modName)
-    let comm = unwords [ "go", "tool", "go2go", "translate", (go2goFilePath modName) ]
-    liftIO $ callCommand comm
+    reportSDoc "function.go" 5 $ " goFile:" <+> (text . show) (goFileName modName)
+
+    -- str <- liftIO getHomeDirectory
+    -- reportSDoc "YAYAYAY" 5 $ (text . show) str 
+    -- let comm = unwords [ "go", "tool", "translate", (go2goFilePath modName) ]
+    -- liftIO $ callCommand comm
 --- Module compilation ---
 
 type GoModuleEnv = Maybe CoinductionKit
@@ -209,9 +212,13 @@ goPostModule opts _ isMain _ defs = do
   when (optGoTransform opts) $ do
     liftIO $ setCurrentDirectory mdir
     reportSDoc "function.go" 5 $ " mdir:" <+> (text . show) mdir
-    let comm = unwords [ "go", "tool", "go2go", "translate", (go2goFilePath m) ]
-    reportSDoc "function.go" 6 $ "\n cmd:" <+> (text . show) comm
-    liftIO $ callCommand comm
+      
+    -- str <- liftIO getHomeDirectory
+    -- reportSDoc "YAYAYAY" 5 $ (text . show) str 
+
+    -- let comm = unwords [ "go", "tool", "translate", (go2goFilePath m) ]
+    -- reportSDoc "function.go" 6 $ "\n cmd:" <+> (text . show) comm
+    -- liftIO $ callCommand comm
   return mod
   where
   es       = catMaybes defs
@@ -229,21 +236,21 @@ goCompileDef opts kit _isMain def = definition (opts, kit) (defName def, def)
 --------------------------------------------------
 
 prefix :: [Char]
-prefix = "golang2/src"
+prefix = "Gopiler"
 
 goMod :: ModuleName -> GlobalId
 goMod m = GlobalId (prefix : map prettyShow (mnameToList m))
 
 goFileName :: GlobalId -> String
-goFileName (GlobalId ms) =  "src/" ++ (intercalate "/" (tail (init ms))) ++ (goFileName' (tail (init ms))) ++ (intercalate "_" (tail ms)) ++ "/" ++ (intercalate "_" (tail ms) ++ ".go2")
+goFileName (GlobalId ms) =  "go/src/Gopiler/" ++ (intercalate "/" (tail (init ms))) ++ (goFileName' (tail (init ms))) ++ (intercalate "_" (tail ms)) ++ "/" ++ (intercalate "_" (tail ms) ++ ".go")
 
 goFileName' :: [String] -> String
 goFileName' = \case
   [] -> ""
   _ -> "/"
 
-go2goFilePath :: GlobalId -> String
-go2goFilePath (GlobalId ms) = "src/" ++ (intercalate "/" (tail (init ms))) ++ (goFileName' (tail (init ms))) ++ (intercalate "_" (tail ms)) ++ "/" ++ (intercalate "_" (tail ms) ++ ".go2")
+-- go2goFilePath :: GlobalId -> String
+-- go2goFilePath (GlobalId ms) = "src/" ++ (intercalate "/" (tail (init ms))) ++ (goFileName' (tail (init ms))) ++ (intercalate "_" (tail ms)) ++ "/" ++ (intercalate "_" (tail ms) ++ ".go")
 
 goImportDecl :: GlobalId -> String
 goImportDecl (GlobalId ms) = (intercalate "/" (init ms)) ++ "/" ++ (intercalate "_" (tail ms))
@@ -815,7 +822,7 @@ compilePrim :: T.TPrim -> Exp
 compilePrim p =
   case p of
     T.PEqI -> Const "helper.Equals"
-    T.PSub -> Const "helper.Minus"
+    T.PSub -> Const "helper.Subtract"
     T.PMul -> Const "helper.Multiply"
     T.PAdd -> Const "helper.Add"
     T.PGeq -> Const "helper.MoreOrEquals"

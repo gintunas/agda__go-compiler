@@ -80,7 +80,7 @@ instance Pretty Go.LocalId where
 
 instance Pretty Go.GoImports where
   pretty (Go.GoImportDeclarations declarations) = "import (\n" <> (hsep (map text (map importString declarations))) <> ")"
-  pretty Go.GoImportField = "type GoImportable int"
+  pretty Go.GoImportField = "type GoImportable bool"
   pretty (Go.GoImportUsage "big") = "const _ = big.Above"  
   pretty (Go.GoImportUsage s) = "type _ " <> (text s) <> ".GoImportable"    
 

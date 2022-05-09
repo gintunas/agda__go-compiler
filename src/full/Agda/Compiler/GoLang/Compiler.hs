@@ -481,7 +481,7 @@ definition' kit q d t ls = do
           used    <- fromMaybe [] <$> getCompiledArgUse q
           funBody <- eliminateCaseDefaults
             =<< eliminateLiteralPatterns (convertGuards treeless)
-          (goArg, (ConstructorType _ name)) <- goTelApproximationFunction t used
+          (goArg, (ConstructorType _ name)) <- goTelApproximation t used
           let count            = countFalses used
           let genericTypesUsed = retrieveGenericArguments goArg
           reportSDoc "function.go" 30
@@ -763,8 +763,8 @@ goTypeApproximation fv t = do
         case tu of
           Pi a b -> do
             reportSDoc "function.go" 10 $ "in pi: :" <+> (text . show) b
-            p1 <- goTypeApproximationF n (unDom a)
-            p2 <- goTypeApproximationF (n + k) (unAbs b)
+            p1 <- goTypeApproximation n (unDom a)
+            p2 <- goTypeApproximation (n + k) (unAbs b)
             reportSDoc "function.go" 10 $ "in p1: :" <+> (text . show) p1
             reportSDoc "function.go" 10 $ "in p2: :" <+> (text . show) p2
             return $ PiType p1 p2
@@ -779,71 +779,10 @@ goTypeApproximation fv t = do
               (MemberId name) <- liftTCM $ fullName q
               return $ ConstructorType (getVarName n) name
           Sort{} -> return EmptyType
+          Var varN [] -> return $ GenericFunctionType (getVarName n) ("T" ++ (show varN))
           _      -> return $ ConstructorType (getVarName n) "interface{}"
   go fv (unEl t)
 
-goTypeApproximationF :: Int -> Type -> TCM TypeId
-goTypeApproximationF fv t = do
-  let
-    go n t = do
-      int <- getBuiltinName builtinInteger
-      nat <- getBuiltinName builtinNat
-      let tu = unSpine t
-      let is q b = Just q == b
-      case tu of
-        Pi a b -> do
-          reportSDoc "function.go" 10 $ "in pi: :" <+> (text . show) b
-          p1 <- go n (unEl $ unDom a)
-          p2 <- go (n + k) (unEl $ unAbs b)
-          reportSDoc "function.go" 10 $ "in p1: :" <+> (text . show) p1
-          reportSDoc "function.go" 10 $ "in p2: :" <+> (text . show) p2
-          return $ PiType p1 p2
-         where
-          k = case b of
-            Abs{}   -> 1
-            NoAbs{} -> 0
-        Def q els
-          | q `is` int -> return $ ConstructorType (getVarName n) "*big.Int"
-          | q `is` nat -> return $ ConstructorType (getVarName n) "*big.Int"
-          | otherwise -> do
-            (MemberId name) <- liftTCM $ fullName q
-            return $ ConstructorType (getVarName n) name
-        Sort{} -> return EmptyType
-        Var varN [] ->
-          return $ GenericFunctionType (getVarName n) ("T" ++ (show varN))
-        _ -> return $ ConstructorType (getVarName n) "interface{}"
-  go fv (unEl t)
-
-goTypeApproximation' :: Int -> Type -> TCM TypeId
-goTypeApproximation' fv t = do
-  let go n t = do
-        int <- getBuiltinName builtinInteger
-        nat <- getBuiltinName builtinNat
-        let tu = unSpine t
-        let is q b = Just q == b
-        case tu of
-          Pi a b -> do
-            reportSDoc "function.go" 10 $ "in pi: :" <+> (text . show) b
-            p1 <- goTypeApproximationF n (unDom a)
-            p2 <- goTypeApproximationF (n + k) (unAbs b)
-            reportSDoc "function.go" 10 $ "in p1: :" <+> (text . show) p1
-            reportSDoc "function.go" 10 $ "in p2: :" <+> (text . show) p2
-            return $ PiType p1 p2
-           where
-            k = case b of
-              Abs{}   -> 1
-              NoAbs{} -> 0
-          Def q els
-            | q `is` int -> return
-            $  ConstructorType (getVarName n) "interface{}"
-            | q `is` nat -> return
-            $  ConstructorType (getVarName n) "interface{}"
-            | otherwise -> do
-              (MemberId name) <- liftTCM $ fullName q
-              return $ ConstructorType (getVarName n) name
-          Sort{} -> return EmptyType
-          _      -> return $ ConstructorType (getVarName n) "interface{}"
-  go fv (unEl t)
 
 goTypeApproximationRet :: Int -> Type -> TCM TypeId
 goTypeApproximationRet fv t = do
@@ -885,20 +824,6 @@ goTelApproximation t erased = do
   reportSDoc "compile.go" 20 $ " filteredArgs:" <+> (text . show) filteredArgs
   (,)
     <$> zipWithM (goTypeApproximation) [0 ..] filteredArgs
-    <*> goTypeApproximationRet (length args) res
-
-goTelApproximationFunction :: Type -> [T.ArgUsage] -> TCM ([TypeId], TypeId)
-goTelApproximationFunction t erased = do
-  TelV tel res <- telView t
-  let args = map (snd . unDom) (telToList tel)
-  reportSDoc "function.go" 20 $ " args:" <+> (text . show) args
-  reportSDoc "function.go" 20 $ " res:" <+> (text . show) res
-  reportSDoc "function.go" 20 $ " used:" <+> (text . show) erased
-  reportSDoc "function.go" 20 $ " len:" <+> (text . show) (length args)
-  let filteredArgs = filter isSortType $ map2 erased args
-  reportSDoc "function.go" 20 $ " filteredArgs:" <+> (text . show) filteredArgs
-  (,)
-    <$> zipWithM (goTypeApproximation') [0 ..] filteredArgs
     <*> goTypeApproximationRet (length args) res
 
 isSortType :: Type -> Bool

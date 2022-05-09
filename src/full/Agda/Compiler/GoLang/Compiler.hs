@@ -157,51 +157,19 @@ goBackend' = Backend' { backendName           = goBackendName
 --- Options ---
 
 data GoOptions = GoOptions
-  { optGoCompile   :: Bool
-  , optGoOptimize  :: Bool
-  ,
-    -- | Remove spaces etc. See https://en.wikipedia.org/wiki/Minification_(programming).
-    optGoMinify    :: Bool
-  ,
-    -- | Run generated code through interpreter.
-    optGoVerify    :: Bool
-  , optGoTransform :: Bool
+  { optGoCompile :: Bool
   }
   deriving Generic
 
 instance NFData GoOptions
 
 defaultGoOptions :: GoOptions
-defaultGoOptions = GoOptions { optGoCompile   = False
-                             , optGoOptimize  = False
-                             , optGoMinify    = False
-                             , optGoVerify    = False
-                             , optGoTransform = False
-                             }
+defaultGoOptions = GoOptions { optGoCompile = False }
 
 goCommandLineFlags :: [OptDescr (Flag GoOptions)]
 goCommandLineFlags =
-  [ Option [] ["go"] (NoArg enable) "compile program using the go backend"
-  , Option []
-           ["go-optimize"]
-           (NoArg enableOpt)
-           "turn on optimizations during Go code generation"
-  ,
-    -- Minification is described at https://en.wikipedia.org/wiki/Minification_(programming)
-    Option [] ["go-minify"] (NoArg enableMin) "minify generated Go code"
-  , Option
-    []
-    ["go-verify"]
-    (NoArg enableVerify)
-    "except for main module, run generated Go modules through `node` (needs to be in PATH)"
-  , Option [] ["go-transform"] (NoArg enableGoTransform) "transform go to go2"
-  ]
- where
-  enable o = pure o { optGoCompile = True }
-  enableOpt o = pure o { optGoOptimize = True }
-  enableMin o = pure o { optGoMinify = True }
-  enableVerify o = pure o { optGoVerify = True }
-  enableGoTransform o = pure o { optGoTransform = True }
+  [Option [] ["go"] (NoArg enable) "compile program using the go backend"]
+  where enable o = pure o { optGoCompile = True }
 
 --- Top-level compilation ---
 
@@ -277,10 +245,6 @@ goPostModule opts _ isMain _ defs = do
         Module m (importDeclarations : ([GoImportField] ++ importUsages)) es
 
   writeModule mod
-  mdir <- compileDir
-  when (optGoTransform opts) $ do
-    liftIO $ setCurrentDirectory mdir
-    reportSDoc "function.go" 5 $ " mdir:" <+> (text . show) mdir
 
   -- str <- liftIO getHomeDirectory
   -- reportSDoc "YAYAYAY" 5 $ (text . show) str
@@ -755,32 +719,34 @@ outFile m = do
 
 goTypeApproximation :: Int -> Type -> TCM TypeId
 goTypeApproximation fv t = do
-  let go n t = do
-        int <- getBuiltinName builtinInteger
-        nat <- getBuiltinName builtinNat
-        let tu = unSpine t
-        let is q b = Just q == b
-        case tu of
-          Pi a b -> do
-            reportSDoc "function.go" 10 $ "in pi: :" <+> (text . show) b
-            p1 <- goTypeApproximation n (unDom a)
-            p2 <- goTypeApproximation (n + k) (unAbs b)
-            reportSDoc "function.go" 10 $ "in p1: :" <+> (text . show) p1
-            reportSDoc "function.go" 10 $ "in p2: :" <+> (text . show) p2
-            return $ PiType p1 p2
-           where
-            k = case b of
-              Abs{}   -> 1
-              NoAbs{} -> 0
-          Def q els
-            | q `is` int -> return $ ConstructorType (getVarName n) "*big.Int"
-            | q `is` nat -> return $ ConstructorType (getVarName n) "*big.Int"
-            | otherwise -> do
-              (MemberId name) <- liftTCM $ fullName q
-              return $ ConstructorType (getVarName n) name
-          Sort{} -> return EmptyType
-          Var varN [] -> return $ GenericFunctionType (getVarName n) ("T" ++ (show varN))
-          _      -> return $ ConstructorType (getVarName n) "interface{}"
+  let
+    go n t = do
+      int <- getBuiltinName builtinInteger
+      nat <- getBuiltinName builtinNat
+      let tu = unSpine t
+      let is q b = Just q == b
+      case tu of
+        Pi a b -> do
+          reportSDoc "function.go" 10 $ "in pi: :" <+> (text . show) b
+          p1 <- goTypeApproximation n (unDom a)
+          p2 <- goTypeApproximation (n + k) (unAbs b)
+          reportSDoc "function.go" 10 $ "in p1: :" <+> (text . show) p1
+          reportSDoc "function.go" 10 $ "in p2: :" <+> (text . show) p2
+          return $ PiType p1 p2
+         where
+          k = case b of
+            Abs{}   -> 1
+            NoAbs{} -> 0
+        Def q els
+          | q `is` int -> return $ ConstructorType (getVarName n) "*big.Int"
+          | q `is` nat -> return $ ConstructorType (getVarName n) "*big.Int"
+          | otherwise -> do
+            (MemberId name) <- liftTCM $ fullName q
+            return $ ConstructorType (getVarName n) name
+        Sort{} -> return EmptyType
+        Var varN [] ->
+          return $ GenericFunctionType (getVarName n) ("T" ++ (show varN))
+        _ -> return $ ConstructorType (getVarName n) "interface{}"
   go fv (unEl t)
 
 

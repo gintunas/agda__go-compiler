@@ -6,9 +6,9 @@ open import Agda.Builtin.Nat
 
 -- SIMPLE ADD
 
--- add : Nat → Nat → Nat
--- add n zero      = n
--- add n (suc m)   = add (suc n) m
+add : Nat → Nat → Nat
+add n zero      = n
+add n (suc m)   = add (suc n) m
 
 -------------------------------------------------------------------------------
 

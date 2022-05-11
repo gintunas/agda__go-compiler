@@ -7,8 +7,9 @@ import           Agda.Compiler.Backend          ( Backend(..)
                                                 , Backend'(..)
                                                 , Recompile(..)
                                                 )
-import           Agda.Compiler.Common
+import           Agda.Compiler.Common hiding (compileDir)
 import qualified Agda.Compiler.GoLang.Pretty   as GoPretty
+import Agda.Compiler.GoLang.Misc
 import           Agda.Compiler.GoLang.Syntax    ( Exp
                                                   ( BinOp
                                                   , Char
@@ -171,6 +172,10 @@ goCommandLineFlags =
   [Option [] ["go"] (NoArg enable) "compile program using the go backend"]
   where enable o = pure o { optGoCompile = True }
 
+-- Set compileDir to home
+compileDir = liftIO getHomeDirectory
+
+
 --- Top-level compilation ---
 
 goPreCompile :: GoOptions -> TCM GoOptions
@@ -179,13 +184,12 @@ goPreCompile opts = return opts
 -- | After all modules have been compiled, copy RTE modules and verify compiled modules.
 goPostCompile :: GoOptions -> IsMain -> Map.Map ModuleName Module -> TCM ()
 goPostCompile opts _ ms = do
-  reportSDoc "function.go" 6 $ " ms:" <+> (text . show) ms
+  reportSDoc "function.go" 6 $ " ms:" <+> (text . prettyShow) ms
   forM_ ms $ \Module { modName } -> do
     mdir <- compileDir
     liftIO $ setCurrentDirectory mdir
-    reportSDoc "function.go" 5 $ " mdir:" <+> (text . show) mdir
-    reportSDoc "function.go" 5 $ " goFile:" <+> (text . show)
-      (goFileName modName)
+    reportSDoc "function.go" 5 $ "\nmdir:" <+> (text . show) mdir
+    reportSDoc "function.go" 5 $ "goFile:" <+> (text . show) (goFileName modName)
 
 -- str <- liftIO getHomeDirectory
 -- reportSDoc "YAYAYAY" 5 $ (text . show) str
@@ -481,9 +485,9 @@ definition' kit q d t ls = do
             <+> (text . show) functionSignature
           reportSDoc "function.go" 25
             $   "\n funBody':"
-            <+> (text . show) funBody'
-          reportSDoc "function.go" 30 $ "\n given:" <+> (text . show) given
-          reportSDoc "function.go" 30 $ "\n etaN:" <+> (text . show) etaN
+            <+> (text . prettyShow) funBody'
+          reportSDoc "function.go" 30 $ "\ngiven:" <+> (text . show) given
+          reportSDoc "function.go" 30 $ "\netaN:" <+> (text . show) etaN
           return $ Just $ applyReturnType returnType
                                           (functionSignature funBody')
     Primitive { primName = p }        -> return Nothing
@@ -510,7 +514,7 @@ definition' kit q d t ls = do
         let np = arity t - nc
         erased <- getErasedConArgs q
         let inverseErased =
-              map (\b -> if b then T.ArgUnused else T.ArgUsed) erased
+              map mapBoolToArgUsage erased
         reportSDoc "compile.go" 20 $ " erased:" <+> (text . show) inverseErased
         constName      <- fullName q
         (goArg, goRes) <- goTelApproximation t inverseErased
@@ -602,10 +606,10 @@ getTypelessMethodCallParams (head : tail) =
 
 compileTerm :: EnvWithOpts -> Nat -> [TypeId] -> T.TTerm -> TCM Exp
 compileTerm kit paramCount args t = do
-  reportSDoc "function.go" 30 $ " compile term:" <+> (text . show) t
+  reportSDoc "function.go" 30 $ " compile term:" <+> (text . prettyShow) t
   let (tx, ts) = T.tLetView t
-  reportSDoc "function.go" 50 $ " compile tx:" <+> (text . show) tx
-  reportSDoc "function.go" 50 $ " compile ts:" <+> (text . show) ts
+  reportSDoc "function.go" 50 $ " compile tx:" <+> (text . prettyShow) tx
+  reportSDoc "function.go" 50 $ " compile ts:" <+> (text . prettyShow) ts
   go t
  where
   go :: T.TTerm -> TCM Exp
@@ -630,7 +634,7 @@ compileTerm kit paramCount args t = do
       return $ GoCreateStruct l transformedArgs
     T.TApp (T.TDef q) x -> do
       reportSDoc "function.go" 15 $ "function definition call"
-      reportSDoc "function.go" 15 $ "\n q:" <+> (text . show) q
+      reportSDoc "function.go" 15 $ "\n q:" <+> (text . prettyShow) q
       name            <- liftTCM $ fullName q
       transformedArgs <- mapM go (filter filterErased x)
       return $ GoMethodCall name (getTypelessMethodCallParams transformedArgs)
@@ -648,7 +652,7 @@ compileTerm kit paramCount args t = do
     T.TApp t' xs | Just f <- getDef t' -> do
       used <- case f of
         Left  q -> fromMaybe [] <$> getCompiledArgUse q
-        Right c -> map (\b -> if b then T.ArgUnused else T.ArgUsed)
+        Right c -> map mapBoolToArgUsage
           <$> getErasedConArgs c
       -- either getCompiledArgUse (\x -> fmap (map (\b -> if b then T.ArgUnused else T.ArgUsed)) $ getErasedConArgs x) f
 

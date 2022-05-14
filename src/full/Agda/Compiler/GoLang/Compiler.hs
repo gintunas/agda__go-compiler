@@ -282,19 +282,14 @@ goMod m = GlobalId (prefix : map prettyShow (mnameToList m))
 goFileName :: GlobalId -> String
 goFileName (GlobalId ms) =
   "go/src/Gopiler/"
-    ++ (intercalate "/" (tail (init ms)))
-    ++ (goFileName' (tail (init ms)))
-    ++ (intercalate "_" (tail ms))
+    ++ (intercalate "/" $ tail $ init ms)
+    ++ case (tail $ init ms) of
+        [] -> ""
+        _  -> "/"
+    ++ (intercalate "_" $ tail ms)
     ++ "/"
-    ++ (intercalate "_" (tail ms) ++ ".go")
-
-goFileName' :: [String] -> String
-goFileName' fn = case fn of
-  [] -> ""
-  _  -> "/"
-
--- go2goFilePath :: GlobalId -> String
--- go2goFilePath (GlobalId ms) = "src/" ++ (intercalate "/" (tail (init ms))) ++ (goFileName' (tail (init ms))) ++ (intercalate "_" (tail ms)) ++ "/" ++ (intercalate "_" (tail ms) ++ ".go")
+    ++ (intercalate "_" $ tail ms )
+    ++ ".go"
 
 goImportDecl :: GlobalId -> String
 goImportDecl (GlobalId ms) =
@@ -352,79 +347,6 @@ global q = do
 --------------------------------------------------
 
 type EnvWithOpts = (GoOptions, GoModuleEnv)
-
-definition :: EnvWithOpts -> (QName, Definition) -> TCM (Maybe Exp)
-definition kit (q, d) = do
-  reportSDoc "compile.go" 10 $ "compiling def:" <+> prettyTCM q
-  (_, ls) <- global q
-  d       <- instantiateFull d
-
-  definition' kit q d (defType d) ls
-
-defGoDef :: Definition -> Maybe String
-defGoDef def = case defCompilerPragmas goBackendName def of
-  [CompilerPragma _ s] -> Just (dropEquals s)
-  []                   -> Nothing
-  _ : _ : _            -> __IMPOSSIBLE__
-  where dropEquals = dropWhile $ \c -> isSpace c || c == '='
-
-ftype :: TypeId -> TypeId
-ftype (ConstructorType     v t) = FunctionType v t
-ftype (FunctionType        v t) = FunctionType v t
-ftype (GenericFunctionType v t) = GenericFunctionType v t
-ftype (PiType              a b) = PiType a b
-ftype _                         = EmptyType
-
-fReturnTypes :: [TypeId] -> [TypeId]
-fReturnTypes ((ConstructorType v t) : tail) =
-  (FunctionReturnElement t) : (fReturnTypes tail)
-fReturnTypes (head : tail) = EmptyType : (fReturnTypes tail)
-fReturnTypes []            = []
-
-createSignature
-  :: MemberId -> [TypeId] -> String -> [String] -> TCM (Exp -> Exp)
-createSignature fname [] resName genTypes = do
-  return $ GoFunction
-    [(OuterSignature fname genTypes EmptyFunctionParameter [] (TypeId resName))]
-createSignature fname (firstArg : tail) resName genTypes = do
-  return $ GoFunction
-    ( (OuterSignature fname
-                      genTypes
-                      (ftype firstArg)
-                      (fReturnTypes tail)
-                      (TypeId resName)
-      )
-    : (createSignatureInner tail resName)
-    )
-
-createSignatureInner :: [TypeId] -> String -> [GoFunctionSignature]
-createSignatureInner (head : tail) retName =
-  (InnerSignature (ftype head) (fReturnTypes tail) (TypeId retName))
-    : (createSignatureInner tail retName)
-createSignatureInner [] retName = []
-
-countFalses :: [T.ArgUsage] -> Nat
-countFalses []                 = 0
-countFalses (T.ArgUnused : xs) = 1 + countFalses xs
-countFalses (_           : xs) = countFalses xs
-
-extractReturnType :: Exp -> TCM TypeId
-extractReturnType (GoFunction signatures _) =
-  extractReturnType' $ head signatures
-extractReturnType _ = __IMPOSSIBLE__
-
-extractReturnType' :: GoFunctionSignature -> TCM TypeId
-extractReturnType' (OuterSignature _ _ _ _ retType) = return retType
-extractReturnType' _ = __IMPOSSIBLE__
-
-retrieveGenericArguments :: [TypeId] -> [String]
-retrieveGenericArguments [] = []
-retrieveGenericArguments ((GenericFunctionType n t) : tail) =
-  t : (retrieveGenericArguments tail)
-retrieveGenericArguments ((PiType a b) : tail) =
-  ((retrieveGenericArguments [a]) ++ (retrieveGenericArguments [b]))
-    ++ (retrieveGenericArguments tail)
-retrieveGenericArguments (_ : tail) = retrieveGenericArguments tail
 
 definition'
   :: EnvWithOpts -> QName -> Definition -> Type -> GoQName -> TCM (Maybe Exp)
@@ -522,6 +444,79 @@ definition' kit q d t ls = do
         case theDef d of
           dt -> return (Just $ GoStruct constName goArg)
     AbstractDefn{} -> __IMPOSSIBLE__
+
+definition :: EnvWithOpts -> (QName, Definition) -> TCM (Maybe Exp)
+definition kit (q, d) = do
+  reportSDoc "compile.go" 10 $ "compiling def:" <+> prettyTCM q
+  (_, ls) <- global q
+  d       <- instantiateFull d
+
+  definition' kit q d (defType d) ls
+
+defGoDef :: Definition -> Maybe String
+defGoDef def = case defCompilerPragmas goBackendName def of
+  [CompilerPragma _ s] -> Just (dropEquals s)
+  []                   -> Nothing
+  _ : _ : _            -> __IMPOSSIBLE__
+  where dropEquals = dropWhile $ \c -> isSpace c || c == '='
+
+ftype :: TypeId -> TypeId
+ftype (ConstructorType     v t) = FunctionType v t
+ftype (FunctionType        v t) = FunctionType v t
+ftype (GenericFunctionType v t) = GenericFunctionType v t
+ftype (PiType              a b) = PiType a b
+ftype _                         = EmptyType
+
+fReturnTypes :: [TypeId] -> [TypeId]
+fReturnTypes ((ConstructorType v t) : tail) =
+  (FunctionReturnElement t) : (fReturnTypes tail)
+fReturnTypes (head : tail) = EmptyType : (fReturnTypes tail)
+fReturnTypes []            = []
+
+createSignature
+  :: MemberId -> [TypeId] -> String -> [String] -> TCM (Exp -> Exp)
+createSignature fname [] resName genTypes = do
+  return $ GoFunction
+    [(OuterSignature fname genTypes EmptyFunctionParameter [] (TypeId resName))]
+createSignature fname (firstArg : tail) resName genTypes = do
+  return $ GoFunction
+    ( (OuterSignature fname
+                      genTypes
+                      (ftype firstArg)
+                      (fReturnTypes tail)
+                      (TypeId resName)
+      )
+    : (createSignatureInner tail resName)
+    )
+
+createSignatureInner :: [TypeId] -> String -> [GoFunctionSignature]
+createSignatureInner (head : tail) retName =
+  (InnerSignature (ftype head) (fReturnTypes tail) (TypeId retName))
+    : (createSignatureInner tail retName)
+createSignatureInner [] retName = []
+
+countFalses :: [T.ArgUsage] -> Nat
+countFalses []                 = 0
+countFalses (T.ArgUnused : xs) = 1 + countFalses xs
+countFalses (_           : xs) = countFalses xs
+
+extractReturnType :: Exp -> TCM TypeId
+extractReturnType (GoFunction signatures _) =
+  extractReturnType' $ head signatures
+extractReturnType _ = __IMPOSSIBLE__
+
+extractReturnType' :: GoFunctionSignature -> TCM TypeId
+extractReturnType' (OuterSignature _ _ _ _ retType) = return retType
+extractReturnType' _ = __IMPOSSIBLE__
+
+retrieveGenericArguments :: [TypeId] -> [String]
+retrieveGenericArguments [] = []
+retrieveGenericArguments ((GenericFunctionType n t) : tail) =
+  t : (retrieveGenericArguments tail)
+retrieveGenericArguments ((PiType a b) : tail) =
+  ((retrieveGenericArguments [a]) ++ (retrieveGenericArguments [b]))
+    ++ (retrieveGenericArguments tail)
+retrieveGenericArguments (_ : tail) = retrieveGenericArguments tail
 
 --------------------------------------------------
 -- Writing out a Golang module
@@ -723,7 +718,7 @@ outFile m = do
 
 goTypeApproximation :: Int -> Type -> TCM TypeId
 goTypeApproximation fv t = do
-  let
+  let 
     go n t = do
       int <- getBuiltinName builtinInteger
       nat <- getBuiltinName builtinNat
@@ -748,8 +743,7 @@ goTypeApproximation fv t = do
             (MemberId name) <- liftTCM $ fullName q
             return $ ConstructorType (getVarName n) name
         Sort{} -> return EmptyType
-        Var varN [] ->
-          return $ GenericFunctionType (getVarName n) ("T" ++ (show varN))
+        Var varN [] -> return $ GenericFunctionType (getVarName n) ("T" ++ (show varN))
         _ -> return $ ConstructorType (getVarName n) "interface{}"
   go fv (unEl t)
 

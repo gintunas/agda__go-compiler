@@ -13,12 +13,12 @@ divider = "\n===================================================================
 reportSDocDivided :: MonadDebug m => VerboseKey -> VerboseLevel -> TCM Doc -> m ()
 reportSDocDivided vk vl tdoc = reportSDoc vk vl $ (\x -> ("\nGO_COMPILER_DEBUG_LOG\nV_KEY:" <+> (text.show) vk <+> "\nV_LEVEL:" <+> (text.show) vl <+> divider <+> x <+> divider)) <$> tdoc 
 
-mapBoolToArgUsage :: Bool -> T.ArgUsage
-mapBoolToArgUsage b = if b then T.ArgUnused else T.ArgUsed
-
 -- aliases of functions for showing intermediate compilation values
 (<+%>) :: (Pretty a) => Doc -> a -> TCM Doc
 d <+%> a = returnTCMT $ d <+> (text . prettyShow) a
 
 (<+%!>) :: (Show a) => Doc -> a -> TCM Doc
 d <+%!> a = returnTCMT $ d <+> (text . show) a
+
+mapBoolToArgUsage :: Bool -> T.ArgUsage
+mapBoolToArgUsage b = if b then T.ArgUnused else T.ArgUsed

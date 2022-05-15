@@ -128,6 +128,8 @@ import           System.FilePath                ( (</>)
                                                 , splitFileName
                                                 )
 
+import qualified Agda.Compiler.MAlonzo.Pragmas as HP
+
 --------------------------------------------------
 -- Entry point into the compiler
 --------------------------------------------------
@@ -135,10 +137,10 @@ import           System.FilePath                ( (</>)
 goBackend :: Backend
 goBackend = Backend goBackend'
 
-goBackend' :: Backend' GoOptions GoOptions GoModuleEnv Module (Maybe Exp)
+goBackend' :: Backend' GoFlags GoEnv GoModuleEnv Module (Maybe Exp)
 goBackend' = Backend' { backendName           = goBackendName
                       , backendVersion        = Nothing
-                      , options               = defaultGoOptions
+                      , options               = defaultGoFlags
                       , commandLineFlags      = goCommandLineFlags
                       , isEnabled             = optGoCompile
                       , preCompile            = goPreCompile
@@ -157,31 +159,59 @@ goBackend' = Backend' { backendName           = goBackendName
 
 --- Options ---
 
-data GoOptions = GoOptions
+data GoFlags = GoFlags
   { optGoCompile :: Bool
   }
   deriving Generic
 
-instance NFData GoOptions
+instance NFData GoFlags
 
-defaultGoOptions :: GoOptions
-defaultGoOptions = GoOptions { optGoCompile = False }
+defaultGoFlags :: GoFlags
+defaultGoFlags = GoFlags { optGoCompile = False }
 
-goCommandLineFlags :: [OptDescr (Flag GoOptions)]
+goCommandLineFlags :: [OptDescr (Flag GoFlags)]
 goCommandLineFlags =
   [Option [] ["go"] (NoArg enable) "compile program using the go backend"]
   where enable o = pure o { optGoCompile = True }
+
+-- A static part of the GO backend's environment that does not
+-- change from module to module.
+data GoEnv = GoEnv
+  { goEnvFlags :: GoFlags
+  , goEnvBool
+  , goEnvTrue
+  , goEnvFalse
+  , goEnvNat
+  , goEnvInteger
+    :: Maybe QName
+    -- Various builtin names.
+  }
+
 
 -- Set compileDir to home
 compileDir = liftIO getHomeDirectory
 
 --- Top-level compilation ---
-goPreCompile :: GoOptions -> TCM GoOptions
-goPreCompile opts = return opts
+goPreCompile :: GoFlags -> TCM GoEnv
+goPreCompile flags = do 
+  gbool  <- getBuiltinName builtinBool
+  gtrue  <- getBuiltinName builtinTrue
+  gfalse  <- getBuiltinName builtinFalse
+  gnat <- getBuiltinName builtinNat
+  gint <- getBuiltinName builtinInteger
+  return $ GoEnv {
+    goEnvFlags = flags
+  , goEnvBool = gbool
+  , goEnvTrue = gtrue
+  , goEnvFalse = gfalse
+  , goEnvNat = gnat
+  , goEnvInteger = gint
+  }
+
 
 -- | After all modules have been compiled, copy RTE modules and verify compiled modules.
-goPostCompile :: GoOptions -> IsMain -> Map.Map ModuleName Module -> TCM ()
-goPostCompile opts _ ms = do
+goPostCompile :: GoEnv -> IsMain -> Map.Map ModuleName Module -> TCM ()
+goPostCompile env _ ms = do
   -- DEBUG_LOGGING
   M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 6 $ " ms:" M.<+%> ms
 
@@ -195,42 +225,51 @@ goPostCompile opts _ ms = do
 
 --- Module compilation ---
 
-type GoModuleEnv = Maybe CoinductionKit
+data GoModuleEnv = GoModuleEnv 
+  { goCoinductionKit :: Maybe CoinductionKit,
+    goEnv :: GoEnv
+  }
+  
 
 goPreModule
-  :: GoOptions
+  :: GoEnv
   -> IsMain
   -> ModuleName
   -> Maybe FilePath
   -> TCM (Recompile GoModuleEnv Module)
-goPreModule _opts _ m ifile = ifM uptodate noComp yesComp
- where
-  uptodate = case ifile of
-    Nothing    -> pure False
-    Just ifile -> liftIO =<< isNewerThan <$> outFile_ <*> pure ifile
-  ifileDesc = fromMaybe "(memory)" ifile
+goPreModule env _ m ifile = do
+  ifM uptodate noComp yesComp
+  where
+    uptodate = case ifile of
+      Nothing    -> pure False
+      Just ifile -> liftIO =<< isNewerThan <$> outFile_ <*> pure ifile
+    ifileDesc = fromMaybe "(memory)" ifile
 
-  noComp    = do
-    name <- curMName
-    M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 2 $ "No compilation needed for:" M.<+%> name
-    return $ Skip skippedModule
+    noComp    = do
+      name <- curMName
+      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 2 $ "No compilation needed for:" M.<+%> name
+      return $ Skip skippedModule
 
-  skippedModule = Module (goMod m) mempty mempty
+    skippedModule = Module (goMod m) mempty mempty
 
-  yesComp = do
-    m   <- prettyShow <$> curMName
-    out <- outFile_
-    M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 1 $ text $ repl [m, ifileDesc, out] "Compiling go <<0>> in <<1>> to <<2>>"
-    Recompile <$> coinductionKit
+    yesComp = do
+      m   <- prettyShow <$> curMName
+      out <- outFile_
+      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 1 $ text $ repl [m, ifileDesc, out] "Compiling go <<0>> in <<1>> to <<2>>"
+      kit <- coinductionKit
+      return $ Recompile $ GoModuleEnv
+        { goCoinductionKit = kit
+        , goEnv = env
+        }
 
 goPostModule
-  :: GoOptions
+  :: GoEnv
   -> GoModuleEnv
   -> IsMain
   -> ModuleName
   -> [Maybe Exp]
   -> TCM Module
-goPostModule opts _ isMain _ defs = do
+goPostModule env _ isMain _ defs = do
   m  <- goMod <$> curMName
   is <- map (goMod . fst) . iImportedModules <$> curIF
   
@@ -257,8 +296,8 @@ goPostModule opts _ isMain _ defs = do
 -- even if they do not define "main".
 
 goCompileDef
-  :: GoOptions -> GoModuleEnv -> IsMain -> Definition -> TCM (Maybe Exp)
-goCompileDef opts kit _isMain def = definition (opts, kit) (defName def, def)
+  :: GoEnv -> GoModuleEnv -> IsMain -> Definition -> TCM (Maybe Exp)
+goCompileDef env kit _isMain def = definition (env, kit) (defName def, def)
 
 --------------------------------------------------
 -- Naming
@@ -337,19 +376,40 @@ global q = do
 -- Main compiling clauses
 --------------------------------------------------
 
-type EnvWithOpts = (GoOptions, GoModuleEnv)
+type EnvWithOpts = (GoEnv, GoModuleEnv)
+
+definition :: EnvWithOpts -> (QName, Definition) -> TCM (Maybe Exp)
+definition kit (q, d) = do
+
+  -- DEBUG_LOGGING
+  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 10 $ "compiling def:" <+> prettyTCM q
+
+  (_, ls) <- global q
+  d       <- instantiateFull d
+
+  definition' kit q d (defType d) ls
 
 definition'
   :: EnvWithOpts -> QName -> Definition -> Type -> GoQName -> TCM (Maybe Exp)
-definition' kit q d t ls = do
+definition' kit q d t ls = do    
+  pragma <- liftTCM $ HP.getHaskellPragma q
+
+  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "DEFINITION ARGS:"
+  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "q: " M.<+%> q
+  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "pragma: " M.<+%> pragma
+  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "d: " M.<+%> d
+  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "t: " M.<+%> t
+  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "ls: " M.<+%> ls
+  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "END OF DEFINITION ARGS"
+
   case theDef d of
     -- coinduction
-    Constructor{} | Just q == (nameOfSharp <$> snd kit) -> do
+    Constructor{} | Just q == (nameOfSharp <$> goCoinductionKit (snd kit)) -> do
       -- DEBUG_LOGGING
       M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ " con1:" M.<+%> d
       return Nothing
     
-    Function{} | Just q == (nameOfFlat <$> snd kit) -> do
+    Function{} | Just q == (nameOfFlat <$> goCoinductionKit (snd kit)) -> do
       -- DEBUG_LOGGING
       M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ " f1:" M.<+%> d
       return Nothing
@@ -423,6 +483,17 @@ definition' kit q d t ls = do
                                           (functionSignature funBody')
     Primitive { primName = p }        -> return Nothing
 
+    -- TODO: implement 
+    -- Datatype{} | is goEnvBool -> do
+    --   -- DEBUG_LOGGING
+    --   M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ " COMPILING BOOL!:"
+    --   let d = M.dname q
+      
+    --   -- DEBUG_LOGGING
+    --   M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ " some d:" M.<+%> d 
+
+
+
     Datatype { dataPathCons = _ : _ } -> do
 
       -- DEBUG_LOGGING
@@ -475,17 +546,6 @@ definition' kit q d t ls = do
         case theDef d of
           dt -> return (Just $ GoStruct constName goArg)
     AbstractDefn{} -> __IMPOSSIBLE__
-
-definition :: EnvWithOpts -> (QName, Definition) -> TCM (Maybe Exp)
-definition kit (q, d) = do
-
-  -- DEBUG_LOGGING
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 10 $ "compiling def:" <+> prettyTCM q
-
-  (_, ls) <- global q
-  d       <- instantiateFull d
-
-  definition' kit q d (defType d) ls
 
 defGoDef :: Definition -> Maybe String
 defGoDef def = case defCompilerPragmas goBackendName def of
@@ -560,34 +620,14 @@ fullName :: QName -> TCM MemberId
 fullName q = do
   (m, ls) <- global q
   case m of
-    Self                 -> return $ MemberId $ encode $ constructorName' ls
+    Self                 -> return $ MemberId $ M.encode $ constructorName' ls
     Global (GlobalId id) -> do
       return
         $  MemberId
         $  (intercalate "_" (tail id))
         ++ "."
-        ++ (encode $ constructorName' ls)
+        ++ (M.encode $ constructorName' ls)
     _ -> __IMPOSSIBLE__
-
-encode :: [Char] -> String
-encode []              = []
-encode name@(c : tail) = do
-  case isAsciiUpper c of
-    True  -> encodeChars (name)
-    False -> encodeChars $ 'F' : name
-
-encodeChars :: [Char] -> String
-encodeChars (c : tail) = (encodeChar c) ++ (encodeChars tail)
-encodeChars []         = []
-
-encodeChar :: Char -> String
-encodeChar c = do
-  case isValidChar c of
-    True  -> [c]
-    False -> "u" ++ (show (ord c))
-
-isValidChar :: Char -> Bool
-isValidChar c = (isLetter c) || ('_' == c) || (isDigit c)
 
 constructorName' :: GoQName -> String
 constructorName' s = do
@@ -655,7 +695,7 @@ compileTerm kit paramCount args t = do
         Record{}   -> return (String "*")
         --in case of qname, we call a function with no arguments
         _          -> return $ GoMethodCall name []
-    T.TApp (T.TCon q) [x] | Just q == (nameOfSharp <$> snd kit) -> do
+    T.TApp (T.TCon q) [x] | Just q == (nameOfSharp <$> goCoinductionKit (snd kit)) -> do
 
       -- DEBUG_LOGGING
       M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "sharp"

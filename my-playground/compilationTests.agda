@@ -1,15 +1,15 @@
 module compilationTests where
 
--- open import Agda.Builtin.Nat
+open import Agda.Builtin.Nat
 open import Agda.Builtin.Bool
 
 -------------------------------------------------------------------------------
 
 -- SIMPLE BOOL OPERATIONS
 
-and : Bool → Bool → Bool
-and true true = true
-and _ _ = false
+-- and : Bool → Bool → Bool
+-- and true true = true
+-- and _ _ = false
 
 -------------------------------------------------------------------------------
 

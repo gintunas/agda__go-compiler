@@ -61,6 +61,8 @@ data Exp
   | Lambda Nat Exp
 
   | GoBool MemberId
+  | GoTrue MemberId
+  | GoFalse MemberId
   | GoVar Nat
   | GoLet String Exp Exp
   | GoInterface MemberId -- interface globalus name

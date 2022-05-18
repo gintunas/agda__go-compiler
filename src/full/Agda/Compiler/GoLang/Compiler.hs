@@ -17,6 +17,9 @@ import Agda.Compiler.GoLang.Syntax
         Char,
         Const,
         Global,
+        GoBool,
+        GoTrue,
+        GoFalse,
         GoCase,
         GoCreateStruct,
         GoFunction,
@@ -28,7 +31,6 @@ import Agda.Compiler.GoLang.Syntax
         GoStruct,
         GoSwitch,
         GoVar,
-        GoBool,
         Integer,
         Lambda,
         Null,
@@ -440,7 +442,7 @@ definition' kit q d t ls = do
           funBody <-
             eliminateCaseDefaults
               =<< eliminateLiteralPatterns (convertGuards treeless)
-          (goArg, (ConstructorType _ name)) <- goTelApproximation t used
+          (goArg, (ConstructorType _ name)) <- goTelApproximation (fst kit) t used
           let count = countFalses used
           let genericTypesUsed = retrieveGenericArguments goArg
 
@@ -492,16 +494,6 @@ definition' kit q d t ls = do
                 (functionSignature funBody')
     Primitive {primName = p} -> return Nothing
     -- TODO: implement
-    Datatype {} | is goEnvBool -> do
-      -- DEBUG_LOGGING
-      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "\n COMPILING BOOL!:" M.<+%> d
-
-      name <- liftTCM $ fullName q
-      return (Just $ GoBool $ name)
-    --   let d = M.dname q
-
-    --   -- DEBUG_LOGGING
-    --   M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ " some d:" M.<+%> d
 
     Datatype {dataPathCons = _ : _} -> do
       -- DEBUG_LOGGING
@@ -509,6 +501,16 @@ definition' kit q d t ls = do
 
       s <- render <$> prettyTCM q
       typeError $ NotImplemented $ "Higher inductive types (" ++ s ++ ")"
+
+    Datatype {} | is goEnvBool -> do
+      -- DEBUG_LOGGING
+      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "\n COMPILING BOOL!:" M.<+%> d
+
+      name <- liftTCM $ fullName q
+      return (Just $ GoBool $ name)
+
+    --   -- DEBUG_LOGGING
+
     Datatype {} -> do
       -- DEBUG_LOGGING
       M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 40 $ " data tupe2:" M.<+%> d
@@ -526,12 +528,12 @@ definition' kit q d t ls = do
       return Nothing
     c@Constructor {conData = p, conPars = nc, conSrcCon = ch, conArity = cona} ->
       do
-        (ff, gg) <- global q
-        (ff2, gg2) <- global' q
+        -- (ff, gg) <- global q
+        -- (ff2, gg2) <- global' q
 
         -- DEBUG_LOGGING
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 5 $ "compiling gg2:" M.<+%> gg2
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 5 $ "compiling gg:" M.<+%> gg
+        -- M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 5 $ "compiling gg2:" M.<+%> gg2
+        -- M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 5 $ "compiling gg:" M.<+%> gg
 
         let np = arity t - nc
         erased <- getErasedConArgs q
@@ -541,14 +543,16 @@ definition' kit q d t ls = do
         -- DEBUG_LOGGING
         M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 20 $ " erased:" M.<+%!> inverseErased
 
-        constName <- fullName q
-        (goArg, goRes) <- goTelApproximation t inverseErased
+        name <- fullName q
+        (goArg, goRes) <- goTelApproximation (fst kit) t inverseErased
 
         -- DEBUG_LOGGING
         M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 20 $ " goTypes:" M.<+%> goArg
 
         case theDef d of
-          dt -> return (Just $ GoStruct constName goArg)
+          dt | is goEnvTrue -> return (Just $ GoTrue name)
+          dt | is goEnvFalse -> return (Just $ GoFalse name)
+          dt -> return (Just $ GoStruct name goArg)
     AbstractDefn {} -> __IMPOSSIBLE__
 
 defGoDef :: Definition -> Maybe String
@@ -829,54 +833,14 @@ outFile m = do
   liftIO $ createDirectoryIfMissing True dir
   return fp
 
-goTypeApproximation :: Int -> Type -> TCM TypeId
-goTypeApproximation i t = goTypeApproximation' i t False
-
-goTypeApproximationRet :: Int -> Type -> TCM TypeId
-goTypeApproximationRet i t = goTypeApproximation' i t True
-
-goTypeApproximation' :: Int -> Type -> Bool -> TCM TypeId
-goTypeApproximation' fv t shouldReturn = do go fv (unEl t)
-  where
-    go n t = do
-      int <- getBuiltinName builtinInteger
-      nat <- getBuiltinName builtinNat
-      let tu = unSpine t
-      let is q b = Just q == b
-      case tu of
-        Pi a b -> do
-          -- DEBUG_LOGGING
-          M.reportSDocDivided "func_test.go" 10 $ "in pi: :" M.<+%> b
-
-          p1 <- if (shouldReturn) then go n (unEl $ unDom a) else goTypeApproximation' n (unDom a) shouldReturn
-          p2 <- if (shouldReturn) then go (n + k) (unEl $ unAbs b) else goTypeApproximation' (n + k) (unAbs b) shouldReturn
-
-          -- DEBUG_LOGGING
-          M.reportSDocDivided "func_test.go" 10 $ "in p1: :" M.<+%> p1
-          M.reportSDocDivided "func_test.go" 10 $ "in p2: :" M.<+%> p2
-
-          return $ PiType p1 p2
-          where
-            k = case b of
-              Abs {} -> 1
-              NoAbs {} -> 0
-        Def q els
-          | q `is` int -> return $ ConstructorType (getVarName n) "*big.Int"
-          | q `is` nat -> return $ ConstructorType (getVarName n) "*big.Int"
-          | otherwise -> do
-            (MemberId name) <- liftTCM $ fullName q
-            return $ ConstructorType (getVarName n) name
-        Sort {} -> return EmptyType
-        Var varN [] -> return $ GenericFunctionType (getVarName n) ("T" ++ (show varN))
-        _ -> return $ ConstructorType (getVarName n) "interface{}"
-
 -- takes in two arrays, first is usage of arguments, second is arguments.
 -- returns only used arguments
 returnUsedArgs :: [T.ArgUsage] -> [a] -> [a]
 returnUsedArgs bs as = [snd p | p <- zip bs as, fst p == T.ArgUsed]
 
-goTelApproximation :: Type -> [T.ArgUsage] -> TCM ([TypeId], TypeId)
-goTelApproximation t usage = do
+-- telescope approximation
+goTelApproximation :: GoEnv -> Type -> [T.ArgUsage] -> TCM ([TypeId], TypeId)
+goTelApproximation env t usage = do
   TelV tel res <- telView t
   let args = map (snd . unDom) (telToList tel)
   -- DEBUG_LOGGING
@@ -890,8 +854,53 @@ goTelApproximation t usage = do
   M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 20 $ " filteredArgs:" M.<+%> filteredArgs
 
   (,)
-    <$> zipWithM (goTypeApproximation) [0 ..] filteredArgs
-    <*> goTypeApproximationRet (length args) res
+    <$> zipWithM (goTypeApproximation env) [0 ..] filteredArgs
+    <*> (goTypeApproximationRet env) (length args) res
+
+-- int is used for adding letter to start of variable name 
+goTypeApproximation :: GoEnv -> Int -> Type -> TCM TypeId
+goTypeApproximation env counter _type = goTypeApproximation' env counter _type False
+
+goTypeApproximationRet :: GoEnv -> Int -> Type -> TCM TypeId
+goTypeApproximationRet env counter _type = goTypeApproximation' env counter _type True
+
+goTypeApproximation' :: GoEnv -> Int -> Type -> Bool -> TCM TypeId
+goTypeApproximation' env counter _type shouldReturn = do approximate env counter (unEl _type)
+  where
+    approximate env counter _type = do
+      -- int <- getBuiltinName builtinInteger
+      -- nat <- getBuiltinName builtinNat
+      let is p q = Just q == p env
+      case (unSpine _type) of
+        Pi a b -> do
+          -- DEBUG_LOGGING
+          M.reportSDocDivided "func_test.go" 10 $ "in pi: :" M.<+%> b
+
+          p1 <- if (shouldReturn) then approximate env counter (unEl $ unDom a) else goTypeApproximation' env counter (unDom a) shouldReturn
+          p2 <- if (shouldReturn) then approximate env (counter + k) (unEl $ unAbs b) else goTypeApproximation' env (counter + k) (unAbs b) shouldReturn
+
+          -- DEBUG_LOGGING
+          M.reportSDocDivided "func_test.go" 10 $ "in p1: :" M.<+%> p1
+          M.reportSDocDivided "func_test.go" 10 $ "in p2: :" M.<+%> p2
+
+          return $ PiType p1 p2
+          where
+            k = case b of
+              Abs {} -> 1
+              NoAbs {} -> 0
+        -- q - qname ; els - eliminations ordered left-to-right.
+        Def q els
+          | is goEnvInteger q -> return $ ConstructorType (getVarName counter) "*big.Int"
+          | is goEnvNat q -> return $ ConstructorType (getVarName counter) "*big.Int"
+          | is goEnvBool q -> return $ ConstructorType (getVarName counter) "bool"
+          | is goEnvTrue q -> return $ ConstructorType (getVarName counter) "true"
+          | is goEnvFalse q -> return $ ConstructorType (getVarName counter) "false"
+          | otherwise -> do
+            (MemberId name) <- liftTCM $ fullName q
+            return $ ConstructorType (getVarName counter) name
+        Sort {} -> return EmptyType
+        Var varN [] -> return $ GenericFunctionType (getVarName counter) ("T" ++ (show varN))
+        _ -> return $ ConstructorType (getVarName counter) "interface{}"
 
 isSortType :: Type -> Bool
 isSortType t = do

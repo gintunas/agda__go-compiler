@@ -26,25 +26,37 @@ instance Pretty Go.Module where
 instance Pretty Go.Exp where
   prettyPrec pr e =
     case e of
-      Go.Const s -> text s
-      Go.GoVar i -> getVarNamet i
+      -- no undefined because it does not exist in golang
+      Go.Null -> text "nil"
+      Go.String s -> "\"" <+> (text $ show s) <+> "\""
+      Go.Char c -> "\'" <+> (text $ show c) <+> "\'"
+      Go.Integer n -> (text "big.NewInt") <> (T.parens $ text $ show n)
+      Go.Double d -> (text "big.NewFloat") <> (T.parens $ text $ show d)
+      -- no lambda
+
+      Go.GoBool b -> "MEMUMEUMEUEMEUM" <+> pretty b
+      Go.GoVar v -> textAndGetVarName v
+      Go.GoLet name val exp -> (text name) <+> ":=" <+> (pretty val) <+> "\n" <+> (pretty exp)
       Go.GoInterface id -> "type" <+> pretty id <+> " = interface{}"
-      Go.GoStruct id elems -> "type" <+> pretty id <+> "struct " <+> (T.braces (vcat $ map pretty elems))
-      Go.GoStructElement localId typeId -> "_" <+> pretty localId <+> pretty typeId <+> T.semi
       Go.GoFunction signatures (Go.GoSwitch a b) -> (vcat $ map pretty signatures) <+> (pretty (Go.GoSwitch a b)) <+> (text $ concat $ replicate (length signatures) "}\n")
       Go.GoFunction signatures body -> (vcat $ map pretty signatures) <+> (pretty body) <+> (text $ concat $ replicate (length signatures) "}\n")
+      
+      Go.GoStruct id elems -> "type" <+> pretty id <+> "struct " <+> (T.braces (vcat $ map pretty elems))
+      Go.GoStructElement localId typeId -> "_" <+> pretty localId <+> pretty typeId <+> T.semi
+      Go.GoCreateStruct name params -> (pretty name) <+> T.lbrace <+> (joinStructParams (map pretty params)) <+> "}"
+      
+      Go.GoIf a b c -> "if (" <+> (pretty a) <+> ") {\n" <+> (pretty b) <+> "\n} else {\n" <+> pretty c <+> "\n}\n"
       Go.GoSwitch v cases -> "switch type_" <> (pretty v) <> (text "  := ") <> (pretty v) <> (text ".(type) {\n") <> (vcat $ map pretty cases) <> "\ndefault:\n_ = type_"<> (pretty v) <> ";\n panic(\"Unreachable\");\n}"
       Go.GoCase name switchVar paramsStart paramCount exps -> "\ncase " <> (pretty name) <> spaceWrap (T.colon) <> (hsep $ map (createCaseParam paramsStart switchVar) (createCaseList paramCount)) <> (vcat $ map pretty exps)
-      Go.GoCreateStruct name params -> (pretty name) <+> T.lbrace <+> (joinStructParams (map pretty params)) <+> "}"
+      
       Go.GoMethodCall name [] -> (pretty name) <> "()"
       Go.GoMethodCall name params -> (pretty name) <> (hsep $ map pretty params)
       Go.GoMethodCallParam exp Go.EmptyType -> T.parens (pretty exp)
       Go.GoMethodCallParam exp typeId -> "(" <> (pretty exp) <> ".(" <> pretty typeId <> "))"
-      Go.GoIf a b c -> "if (" <+> (pretty a) <+> ") {\n" <+> (pretty b) <+> "\n} else {\n" <+> pretty c <+> "\n}\n"
-      Go.BinOp a b c -> (pretty a) <> "(" <> (T.parens (pretty b)) <> "," <> (T.parens (pretty c)) <> ")"
-      Go.GoLet name val exp -> (text name) <+> ":=" <+> (pretty val) <+> "\n" <+> (pretty exp)
-      Go.Integer n -> (text "big.NewInt") <> (T.parens $ text $ show n)
       Go.ReturnExpression exp t -> "return helper.Id(" <> (pretty exp) <> ").(" <> pretty t <> ")"
+      
+      Go.BinOp a b c -> (pretty a) <> "(" <> (T.parens (pretty b)) <> "," <> (T.parens (pretty c)) <> ")"
+      Go.Const s -> text s
       _ -> text ""
 
 spaceWrap :: Doc -> Doc
@@ -56,7 +68,7 @@ joinStructParams [x] = x <+> (joinStructParams [])
 joinStructParams (x:xs) = x <+> "," <+> (joinStructParams xs)
 
 createCaseParam :: Nat -> Nat -> Nat -> Doc
-createCaseParam paramStart switchVar paramId = "\n" <> (getVarNamet (paramStart + paramId)) <> " := type_" <> (getVarNamet switchVar) <> "." <> (getVarNamet (paramId - 1)) <> ";\n _ = " <> (getVarNamet (paramStart + paramId))<> ";\n"
+createCaseParam paramStart switchVar paramId = "\n" <> (textAndGetVarName (paramStart + paramId)) <> " := type_" <> (textAndGetVarName switchVar) <> "." <> (textAndGetVarName (paramId - 1)) <> ";\n _ = " <> (textAndGetVarName (paramStart + paramId))<> ";\n"
 
 instance Pretty Go.MemberId where
   pretty (Go.MemberId  s) = text s
@@ -69,8 +81,8 @@ createCaseList n = [1..n]
 getVarName :: Nat -> String
 getVarName n = [chr ((ord 'A') + n)]
 
-getVarNamet :: Nat -> Doc
-getVarNamet n = text $ getVarName n
+textAndGetVarName :: Nat -> Doc
+textAndGetVarName n = text $ getVarName n
 
 instance Pretty Go.GlobalId where
   pretty (Go.GlobalId m) = text $ intercalate "_" m

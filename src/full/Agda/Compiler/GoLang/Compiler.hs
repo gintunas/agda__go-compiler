@@ -212,7 +212,7 @@ goPreCompile flags = do
   gtrue <- getBuiltinName builtinTrue
   gfalse <- getBuiltinName builtinFalse
   gnat <- getBuiltinName builtinNat
-  gint <- getBuiltinName builtinInteger
+  gint <- getBuiltinName builtinInteger  
   return $
     GoEnv
       { goEnvFlags = flags,
@@ -222,6 +222,10 @@ goPreCompile flags = do
         goEnvNat = gnat,
         goEnvInteger = gint
       }
+
+-- Type resolution utils
+isGoType :: GoEnv -> QName -> (GoEnv -> Maybe QName)-> Bool
+isGoType env q p = Just q == p env
 
 -- | After all modules have been compiled, copy RTE modules and verify compiled modules.
 goPostCompile :: GoEnv -> IsMain -> Map.Map ModuleName Module -> TCM ()
@@ -408,7 +412,7 @@ definition' ::
   EnvWithOpts -> QName -> Definition -> Type -> GoQName -> TCM (Maybe Exp)
 definition' kit q d t ls = do
   pragma <- liftTCM $ HP.getHaskellPragma q
-  let is p = Just q == p (fst kit)
+  let is = isGoType (fst kit) q
 
   M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "DEFINITION ARGS:"
   M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "q: " M.<+%> q
@@ -551,10 +555,13 @@ definition' kit q d t ls = do
         -- DEBUG_LOGGING
         M.reportS "GO_COMPILER_DEBUG_LOG" 20 $ " goTypes:" M.<+%> goArg
 
-        case theDef d of
-          dt | is goEnvTrue -> return (Just $ GoTrue name)
-          dt | is goEnvFalse -> return (Just $ GoFalse name)
-          dt -> return (Just $ GoStruct name goArg)
+        let 
+          resolveConstructorType def
+            | is goEnvTrue = GoTrue name
+            | is goEnvFalse = GoFalse name
+            | otherwise = GoStruct name goArg
+
+        return $ Just $ resolveConstructorType (theDef d)
     AbstractDefn {} -> __IMPOSSIBLE__
 
 defGoDef :: Definition -> Maybe String
@@ -883,9 +890,6 @@ goTypeApproximation' :: GoEnv -> Int -> Type -> Bool -> TCM TypeId
 goTypeApproximation' env counter _type shouldReturn = do approximate env counter (unEl _type)
   where
     approximate env counter _type = do
-      -- int <- getBuiltinName builtinInteger
-      -- nat <- getBuiltinName builtinNat
-      let is p q = Just q == p env
       case (unSpine _type) of
         Pi a b -> do
           -- DEBUG_LOGGING
@@ -905,12 +909,14 @@ goTypeApproximation' env counter _type shouldReturn = do approximate env counter
               NoAbs {} -> 0
         -- q - qname ; els - eliminations ordered left-to-right.
         Def q els
-          | is goEnvInteger q -> return $ ConstructorType (getVarName counter) "*big.Int"
-          | is goEnvNat q -> return $ ConstructorType (getVarName counter) "*big.Int"
-          | is goEnvBool q -> return $ ConstructorType (getVarName counter) "bool"
+          | is goEnvInteger -> return $ ConstructorType (getVarName counter) "*big.Int"
+          | is goEnvNat -> return $ ConstructorType (getVarName counter) "*big.Int"
+          | is goEnvBool -> return $ ConstructorType (getVarName counter) "bool"
           | otherwise -> do
             (MemberId name) <- liftTCM $ fullName q
             return $ ConstructorType (getVarName counter) name
+          where
+            is = isGoType env q
         Sort {} -> return EmptyType
         Var varN [] -> return $ GenericFunctionType (getVarName counter) ("T" ++ (show varN))
         _ -> return $ ConstructorType (getVarName counter) "interface{}"

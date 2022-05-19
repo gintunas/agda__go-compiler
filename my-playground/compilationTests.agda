@@ -1,6 +1,6 @@
 module compilationTests where
 
-open import Agda.Builtin.Nat
+-- open import Agda.Builtin.Nat
 open import Agda.Builtin.Bool
 
 -------------------------------------------------------------------------------
@@ -10,6 +10,21 @@ open import Agda.Builtin.Bool
 -- and : Bool → Bool → Bool
 -- and true true = true
 -- and _ _ = false
+
+-- xor : Bool → Bool → Bool
+-- xor true false = true
+-- xor false true = true
+-- xor _ _ = false
+
+-- DOESNT WORK
+-- or : Bool → Bool → Bool
+-- or true _ = true
+-- or _ true = true
+-- or _ _ = false
+
+not : Bool → Bool
+not true = false
+not false = true
 
 -------------------------------------------------------------------------------
 

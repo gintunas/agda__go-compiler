@@ -140,6 +140,7 @@ import System.FilePath
     (</>),
   )
 import Prelude hiding (writeFile)
+import Agda.TypeChecking.Monad.Base (returnTCMT)
 
 --------------------------------------------------
 -- Entry point into the compiler
@@ -226,15 +227,15 @@ goPreCompile flags = do
 goPostCompile :: GoEnv -> IsMain -> Map.Map ModuleName Module -> TCM ()
 goPostCompile env _ ms = do
   -- DEBUG_LOGGING
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 6 $ " ms:" M.<+%> ms
+  M.reportS "GO_COMPILER_DEBUG_LOG" 6 $ " ms:" M.<+%> ms
 
   forM_ ms $ \Module {modName} -> do
     mdir <- compileDir
     liftIO $ setCurrentDirectory mdir
 
     -- DEBUG_LOGGING
-    M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 5 $ "mdir:" M.<+%> mdir
-    M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 5 $ "goFile:" M.<+%> (goFileName modName)
+    M.reportS "GO_COMPILER_DEBUG_LOG" 5 $ "mdir:" M.<+%> mdir
+    M.reportS "GO_COMPILER_DEBUG_LOG" 5 $ "goFile:" M.<+%> (goFileName modName)
 
 --- Module compilation ---
 
@@ -259,7 +260,7 @@ goPreModule env _ m ifile = do
 
     noComp = do
       name <- curMName
-      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 2 $ "No compilation needed for:" M.<+%> name
+      M.reportS "GO_COMPILER_DEBUG_LOG" 2 $ "No compilation needed for:" M.<+%> name
       return $ Skip skippedModule
 
     skippedModule = Module (goMod m) mempty mempty
@@ -267,7 +268,7 @@ goPreModule env _ m ifile = do
     yesComp = do
       m <- prettyShow <$> curMName
       out <- outFile_
-      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 1 $ text $ repl [m, ifileDesc, out] "Compiling go <<0>> in <<1>> to <<2>>"
+      M.reportS "GO_COMPILER_DEBUG_LOG" 1 $ text $ repl [m, ifileDesc, out] "Compiling go <<0>> in <<1>> to <<2>>"
       kit <- coinductionKit
       return $
         Recompile $
@@ -288,8 +289,8 @@ goPostModule env _ isMain _ defs = do
   is <- map (goMod . fst) . iImportedModules <$> curIF
 
   -- DEBUG_LOGGING
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 10 $ "m:" M.<+%> m
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 10 $ "is:" M.<+%> is
+  M.reportS "GO_COMPILER_DEBUG_LOG" 10 $ "m:" M.<+%> m
+  M.reportS "GO_COMPILER_DEBUG_LOG" 10 $ "is:" M.<+%> is
 
   let importDeclarations =
         GoImportDeclarations $ (map goImportDecl is) ++ ["math/big", "helper"]
@@ -396,7 +397,7 @@ type EnvWithOpts = (GoEnv, GoModuleEnv)
 definition :: EnvWithOpts -> (QName, Definition) -> TCM (Maybe Exp)
 definition kit (q, d) = do
   -- DEBUG_LOGGING
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 10 $ "compiling def:" <+> prettyTCM q
+  M.reportS "GO_COMPILER_DEBUG_LOG" 10 $ "compiling def:" <+> prettyTCM q
 
   (_, ls) <- global q
   d <- instantiateFull d
@@ -409,23 +410,23 @@ definition' kit q d t ls = do
   pragma <- liftTCM $ HP.getHaskellPragma q
   let is p = Just q == p (fst kit)
 
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "DEFINITION ARGS:"
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "q: " M.<+%> q
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "pragma: " M.<+%> pragma
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "d: " M.<+%> d
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "t: " M.<+%> t
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "ls: " M.<+%> ls
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ "END OF DEFINITION ARGS"
+  M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "DEFINITION ARGS:"
+  M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "q: " M.<+%> q
+  M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "pragma: " M.<+%> pragma
+  M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "d: " M.<+%> d
+  M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "t: " M.<+%> t
+  M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "ls: " M.<+%> ls
+  M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "END OF DEFINITION ARGS"
 
   case theDef d of
     -- coinduction
     Constructor {} | Just q == (nameOfSharp <$> goCoinductionKit (snd kit)) -> do
       -- DEBUG_LOGGING
-      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ " con1:" M.<+%> d
+      M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ " con1:" M.<+%> d
       return Nothing
     Function {} | Just q == (nameOfFlat <$> goCoinductionKit (snd kit)) -> do
       -- DEBUG_LOGGING
-      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ " f1:" M.<+%> d
+      M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ " f1:" M.<+%> d
       return Nothing
     DataOrRecSig {} -> __IMPOSSIBLE__
     Axiom {} -> return Nothing
@@ -433,7 +434,7 @@ definition' kit q d t ls = do
     PrimitiveSort {} -> return Nothing
     Function {} | otherwise -> do
       -- DEBUG_LOGGING
-      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 5 $ "compiling fun:" <+> prettyTCM q
+      M.reportS "GO_COMPILER_DEBUG_LOG" 5 $ "compiling fun:" <+> prettyTCM q
 
       fname <- liftTCM $ fullName q
       caseMaybeM (toTreeless T.EagerEvaluation q) (pure Nothing) $ \treeless ->
@@ -447,20 +448,21 @@ definition' kit q d t ls = do
           let genericTypesUsed = retrieveGenericArguments goArg
 
           -- DEBUG_LOGGING
-          M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $
+          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $
             " genericTypesUsed:"
               M.<+%> genericTypesUsed
 
           -- DEBUG_LOGGING
-          M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $
+          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $
             " compiled treeless fun:"
               <+> pretty funBody
+
           (TelV tel res) <- telView t
           let args = map (snd . unDom) (telToList tel)
 
           -- DEBUG_LOGGING
-          M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ " goArg:" M.<+%> goArg
-          M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ " args:" M.<+%> args
+          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ " goArg:" M.<+%> goArg
+          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ " args:" M.<+%> args
 
           let (body, given) = lamView funBody
                 where
@@ -482,10 +484,10 @@ definition' kit q d t ls = do
           returnType <- extractReturnType emptyFunction
 
           -- DEBUG_LOGGING
-          M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 25 $ "functionSignature:" M.<+%!> functionSignature
-          M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 25 $ "funBody':" M.<+%> funBody'
-          M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "\ngiven:" M.<+%> given
-          M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "\netaN:" M.<+%> etaN
+          M.reportS "GO_COMPILER_DEBUG_LOG" 25 $ "functionSignature:" M.<+%!> functionSignature
+          M.reportS "GO_COMPILER_DEBUG_LOG" 25 $ "funBody':" M.<+%> funBody'
+          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "\ngiven:" M.<+%> given
+          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "\netaN:" M.<+%> etaN
 
           return $
             Just $
@@ -497,14 +499,14 @@ definition' kit q d t ls = do
 
     Datatype {dataPathCons = _ : _} -> do
       -- DEBUG_LOGGING
-      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ " data tupe:" M.<+%> q
+      M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ " data tupe:" M.<+%> q
 
       s <- render <$> prettyTCM q
       typeError $ NotImplemented $ "Higher inductive types (" ++ s ++ ")"
 
     Datatype {} | is goEnvBool -> do
       -- DEBUG_LOGGING
-      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "\n COMPILING BOOL!:" M.<+%> d
+      M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "\n COMPILING BOOL!:" M.<+%> d
 
       name <- liftTCM $ fullName q
       return (Just $ GoBool $ name)
@@ -513,12 +515,12 @@ definition' kit q d t ls = do
 
     Datatype {} -> do
       -- DEBUG_LOGGING
-      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 40 $ " data tupe2:" M.<+%> d
+      M.reportS "GO_COMPILER_DEBUG_LOG" 40 $ " data tupe2:" M.<+%> d
 
       let nameee = uglyShowName (qnameName q)
 
       -- DEBUG_LOGGING
-      M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "nameee:" M.<+%> nameee
+      M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "nameee:" M.<+%> nameee
 
       computeErasedConstructorArgs q
       name <- liftTCM $ fullName q
@@ -532,8 +534,8 @@ definition' kit q d t ls = do
         -- (ff2, gg2) <- global' q
 
         -- DEBUG_LOGGING
-        -- M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 5 $ "compiling gg2:" M.<+%> gg2
-        -- M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 5 $ "compiling gg:" M.<+%> gg
+        -- M.reportS "GO_COMPILER_DEBUG_LOG" 5 $ "compiling gg2:" M.<+%> gg2
+        -- M.reportS "GO_COMPILER_DEBUG_LOG" 5 $ "compiling gg:" M.<+%> gg
 
         let np = arity t - nc
         erased <- getErasedConArgs q
@@ -541,13 +543,13 @@ definition' kit q d t ls = do
               map M.mapBoolToArgUsage erased
 
         -- DEBUG_LOGGING
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 20 $ " erased:" M.<+%!> inverseErased
+        M.reportS "GO_COMPILER_DEBUG_LOG" 20 $ " erased:" M.<+%!> inverseErased
 
         name <- fullName q
         (goArg, goRes) <- goTelApproximation (fst kit) t inverseErased
 
         -- DEBUG_LOGGING
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 20 $ " goTypes:" M.<+%> goArg
+        M.reportS "GO_COMPILER_DEBUG_LOG" 20 $ " goTypes:" M.<+%> goArg
 
         case theDef d of
           dt | is goEnvTrue -> return (Just $ GoTrue name)
@@ -686,18 +688,18 @@ getTypelessMethodCallParams tail =
 compileTerm :: EnvWithOpts -> Nat -> [TypeId] -> T.TTerm -> TCM Exp
 compileTerm kit paramCount args t = do
   -- DEBUG_LOGGING
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ " compile term:" M.<+%> t
+  M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ " compile term:" M.<+%> t
 
   let (tx, ts) = T.tLetView t
 
   -- DEBUG_LOGGING
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ " compile tx:" M.<+%> tx
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 50 $ " compile ts:" M.<+%> ts
+  M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ " compile tx:" M.<+%> tx
+  M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ " compile ts:" M.<+%> ts
 
-  go t
+  compileTerm' t
   where
-    go :: T.TTerm -> TCM Exp
-    go tt = case tt of
+    compileTerm' :: T.TTerm -> TCM Exp
+    compileTerm' tt = case tt of
       T.TVar x -> return $ GoVar $ paramCount - x
       T.TDef q -> do
         d <- getConstInfo q
@@ -710,29 +712,29 @@ compileTerm kit paramCount args t = do
           _ -> return $ GoMethodCall name []
       T.TApp (T.TCon q) [x] | Just q == (nameOfSharp <$> goCoinductionKit (snd kit)) -> do
         -- DEBUG_LOGGING
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "sharp"
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "sharp"
 
         unit
       T.TApp (T.TCon q) x -> do
         -- DEBUG_LOGGING
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "contructor"
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "contructor"
 
         l <- fullName q
-        transformedArgs <- mapM go (filter filterErased x)
+        transformedArgs <- mapM compileTerm' (filter filterErased x)
         return $ GoCreateStruct l transformedArgs
       T.TApp (T.TDef q) x -> do
         -- DEBUG_LOGGING
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 15 $ "function definition call"
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 15 $ "q:" M.<+%> q
+        M.reportS "GO_COMPILER_DEBUG_LOG" 15 $ "function definition call"
+        M.reportS "GO_COMPILER_DEBUG_LOG" 15 $ "q:" M.<+%> q
 
         name <- liftTCM $ fullName q
-        transformedArgs <- mapM go (filter filterErased x)
+        transformedArgs <- mapM compileTerm' (filter filterErased x)
         return $ GoMethodCall name (getTypelessMethodCallParams transformedArgs)
       T.TApp (T.TVar v1) x -> do
         -- DEBUG_LOGGING
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "function var function"
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "function var function"
 
-        transformedArgs <- mapM go (filter filterErased x)
+        transformedArgs <- mapM compileTerm' (filter filterErased x)
         let typedMethodParam =
               getPiTypedMethodParams (args !! (paramCount - v1)) transformedArgs
         return $
@@ -740,9 +742,9 @@ compileTerm kit paramCount args t = do
             (MemberId (getVarName (paramCount - v1)))
             [typedMethodParam]
       T.TApp (T.TPrim T.PIf) [c, x, y] -> do
-        GoIf <$> (go c) <*> (go x) <*> (go y)
+        GoIf <$> (compileTerm' c) <*> (compileTerm' x) <*> (compileTerm' y)
       T.TApp (T.TPrim primType) [x, y] -> do
-        BinOp <$> (go (T.TPrim primType)) <*> (go x) <*> (go y)
+        BinOp <$> (compileTerm' (T.TPrim primType)) <*> (compileTerm' x) <*> (compileTerm' y)
       T.TApp t' xs | Just f <- getDef t' -> do
         used <- case f of
           Left q -> fromMaybe [] <$> getCompiledArgUse q
@@ -752,50 +754,61 @@ compileTerm kit paramCount args t = do
         -- either getCompiledArgUse (\x -> fmap (map (\b -> if b then T.ArgUnused else T.ArgUsed)) $ getErasedConArgs x) f
 
         -- DEBUG_LOGGING
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "just f used:" M.<+%!> used
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "just f:" M.<+%> (getDef t')
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "TApp xs:" M.<+%> xs
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "just f used:" M.<+%!> used
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "just f:" M.<+%> (getDef t')
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "TApp xs:" M.<+%> xs
 
         unit
       T.TApp t xs -> do
         -- DEBUG_LOGGING
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "TApp xs:" M.<+%> xs
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "TApp xs:" M.<+%> xs
 
         unit
       T.TLam t -> do
-        go t
+        compileTerm' t
       T.TLet varDef nextExp -> do
-        GoLet
-          <$> (return (getVarName (paramCount + 1)))
-          <*> (go varDef)
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet first param:" M.<+%> (getVarName (paramCount + 1))
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet second param:" M.<+%> varDef
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet third param:" M.<+%> nextExp
+
+        GoLet 
+          <$> (return $ getVarName (paramCount + 1))
+          <*> (compileTerm' varDef)
           <*> (compileTerm kit (paramCount + 1) args nextExp)
       T.TLit l -> do
         -- DEBUG_LOGGING
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "TLit l:" M.<+%> l
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "TLit l:" M.<+%> l
 
         return $ literal l
       T.TCon q -> do
         d <- getConstInfo q
 
         -- DEBUG_LOGGING
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "TCon d:" M.<+%> d
-
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "TCon d:" M.<+%> d
         name <- liftTCM $ fullName q
-        return $ GoCreateStruct name []
+
+        return $ comparethedef name (defName d)
+
+        where
+          comparethedef name defName
+            | is goEnvTrue defName || is goEnvFalse defName = Const $ prettyShow name
+            | otherwise = GoCreateStruct name []
+
+
       T.TCase sc ct def alts | T.CTData _ dt <- T.caseType ct -> do
         cases <- mapM (compileAlt kit paramCount args (paramCount - sc)) alts
         return $ GoSwitch (GoVar (paramCount - sc)) cases
       T.TCase _ _ _ _ -> __IMPOSSIBLE__
       T.TPrim p -> do
         -- DEBUG_LOGGING
-        M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 30 $ "prim:" M.<+%!> p
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "prim:" M.<+%!> p
 
         return $ compilePrim p
       T.TUnit -> unit
       T.TSort -> unit
       T.TErased -> unit
       T.TError T.TUnreachable -> return Undefined
-      T.TCoerce t -> go t
+      T.TCoerce t -> compileTerm' t
 
     getDef (T.TDef f) = Just (Left f)
     getDef (T.TCon c) = Just (Right c)
@@ -803,6 +816,8 @@ compileTerm kit paramCount args t = do
     getDef _ = Nothing
 
     unit = return Null
+
+    is p q = Just q == p (fst kit)
 
 eraseLocalVars :: [Bool] -> T.TTerm -> T.TTerm
 eraseLocalVars [] x = x
@@ -815,8 +830,8 @@ writeModule m = do
   out <- outFile (modName m)
 
   -- DEBUG_LOGGING
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 4 $ "out: :" M.<+%> out
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 10 $ "module: :" <+> (multiLineText (show m))
+  M.reportS "GO_COMPILER_DEBUG_LOG" 4 $ "out: :" M.<+%> out
+  M.reportS "GO_COMPILER_DEBUG_LOG" 10 $ "module: :" <+> (multiLineText (show m))
 
   liftIO (writeFile out (GoPretty.prettyPrintGo m))
 
@@ -828,7 +843,7 @@ outFile m = do
       fp = dir </> fn
 
   -- DEBUG_LOGGING
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 5 $ " dir o:" M.<+%> dir
+  M.reportS "GO_COMPILER_DEBUG_LOG" 5 $ " dir o:" M.<+%> dir
 
   liftIO $ createDirectoryIfMissing True dir
   return fp
@@ -844,14 +859,14 @@ goTelApproximation env t usage = do
   TelV tel res <- telView t
   let args = map (snd . unDom) (telToList tel)
   -- DEBUG_LOGGING
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 20 $ " args:" M.<+%> args
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 20 $ " used:" M.<+%!> usage
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 20 $ " len:" M.<+%> (length args)
+  M.reportS "GO_COMPILER_DEBUG_LOG" 20 $ " args:" M.<+%> args
+  M.reportS "GO_COMPILER_DEBUG_LOG" 20 $ " used:" M.<+%!> usage
+  M.reportS "GO_COMPILER_DEBUG_LOG" 20 $ " len:" M.<+%> (length args)
 
   let filteredArgs = returnUsedArgs usage $ filter isSortType args
 
   -- DEBUG_LOGGING
-  M.reportSDocDivided "GO_COMPILER_DEBUG_LOG" 20 $ " filteredArgs:" M.<+%> filteredArgs
+  M.reportS "GO_COMPILER_DEBUG_LOG" 20 $ " filteredArgs:" M.<+%> filteredArgs
 
   (,)
     <$> zipWithM (goTypeApproximation env) [0 ..] filteredArgs
@@ -874,14 +889,14 @@ goTypeApproximation' env counter _type shouldReturn = do approximate env counter
       case (unSpine _type) of
         Pi a b -> do
           -- DEBUG_LOGGING
-          M.reportSDocDivided "func_test.go" 10 $ "in pi: :" M.<+%> b
+          M.reportS "func_test.go" 10 $ "in pi: :" M.<+%> b
 
           p1 <- if (shouldReturn) then approximate env counter (unEl $ unDom a) else goTypeApproximation' env counter (unDom a) shouldReturn
           p2 <- if (shouldReturn) then approximate env (counter + k) (unEl $ unAbs b) else goTypeApproximation' env (counter + k) (unAbs b) shouldReturn
 
           -- DEBUG_LOGGING
-          M.reportSDocDivided "func_test.go" 10 $ "in p1: :" M.<+%> p1
-          M.reportSDocDivided "func_test.go" 10 $ "in p2: :" M.<+%> p2
+          M.reportS "func_test.go" 10 $ "in p1: :" M.<+%> p1
+          M.reportS "func_test.go" 10 $ "in p2: :" M.<+%> p2
 
           return $ PiType p1 p2
           where
@@ -893,8 +908,6 @@ goTypeApproximation' env counter _type shouldReturn = do approximate env counter
           | is goEnvInteger q -> return $ ConstructorType (getVarName counter) "*big.Int"
           | is goEnvNat q -> return $ ConstructorType (getVarName counter) "*big.Int"
           | is goEnvBool q -> return $ ConstructorType (getVarName counter) "bool"
-          | is goEnvTrue q -> return $ ConstructorType (getVarName counter) "true"
-          | is goEnvFalse q -> return $ ConstructorType (getVarName counter) "false"
           | otherwise -> do
             (MemberId name) <- liftTCM $ fullName q
             return $ ConstructorType (getVarName counter) name

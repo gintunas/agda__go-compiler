@@ -17,11 +17,11 @@ import Agda.Compiler.GoLang.Syntax
         Char,
         Const,
         Global,
+        GoArray,
         GoBool,
-        GoTrue,
-        GoFalse,
         GoCase,
         GoCreateStruct,
+        GoFalse,
         GoFunction,
         GoIf,
         GoInterface,
@@ -30,8 +30,10 @@ import Agda.Compiler.GoLang.Syntax
         GoMethodCallParam,
         GoStruct,
         GoSwitch,
+        GoTrue,
         GoVar,
         Integer,
+        SimpleInteger,
         Lambda,
         Null,
         ReturnExpression,
@@ -86,6 +88,7 @@ import Agda.Syntax.Internal
 import Agda.Syntax.Literal (Literal (..))
 import qualified Agda.Syntax.Treeless as T
 import Agda.TypeChecking.Monad
+import Agda.TypeChecking.Monad.Base (returnTCMT)
 import Agda.TypeChecking.Pretty
 import Agda.TypeChecking.Primitive (getBuiltinName)
 import Agda.TypeChecking.Reduce (instantiateFull)
@@ -140,7 +143,6 @@ import System.FilePath
     (</>),
   )
 import Prelude hiding (writeFile)
-import Agda.TypeChecking.Monad.Base (returnTCMT)
 
 --------------------------------------------------
 -- Entry point into the compiler
@@ -174,20 +176,28 @@ goBackend' =
 --- Options ---
 
 data GoFlags = GoFlags
-  { optGoCompile :: Bool
+  { optGoCompile :: Bool,
+    optUseSimpleInt :: Bool
   }
   deriving (Generic)
 
 instance NFData GoFlags
 
 defaultGoFlags :: GoFlags
-defaultGoFlags = GoFlags {optGoCompile = False}
+defaultGoFlags =
+  GoFlags
+    { optGoCompile = False,
+      optUseSimpleInt = False
+    }
 
 goCommandLineFlags :: [OptDescr (Flag GoFlags)]
 goCommandLineFlags =
-  [Option [] ["go"] (NoArg enable) "compile program using the go backend"]
+  [ Option [] ["go"] (NoArg enable) "compile program using the go backend",
+    Option [] ["useSimpleInt"] (NoArg enableUint) "use Go uint64 instead of bigInteger for natural numbers"
+  ]
   where
     enable o = pure o {optGoCompile = True}
+    enableUint o = pure o {optUseSimpleInt = True}
 
 -- A static part of the GO backend's environment that does not
 -- change from module to module.
@@ -197,7 +207,9 @@ data GoEnv = GoEnv
     goEnvTrue,
     goEnvFalse,
     goEnvNat,
-    goEnvInteger ::
+    goEnvInteger,
+    goEnvList,
+    goEnvNil ::
       Maybe QName
       -- Various builtin names.
   }
@@ -212,7 +224,9 @@ goPreCompile flags = do
   gtrue <- getBuiltinName builtinTrue
   gfalse <- getBuiltinName builtinFalse
   gnat <- getBuiltinName builtinNat
-  gint <- getBuiltinName builtinInteger  
+  gint <- getBuiltinName builtinInteger
+  glist <- getBuiltinName builtinList
+  gnil <- getBuiltinName builtinNil
   return $
     GoEnv
       { goEnvFlags = flags,
@@ -220,11 +234,13 @@ goPreCompile flags = do
         goEnvTrue = gtrue,
         goEnvFalse = gfalse,
         goEnvNat = gnat,
-        goEnvInteger = gint
+        goEnvInteger = gint,
+        goEnvList = glist,
+        goEnvNil = gnil
       }
 
 -- Type resolution utils
-isGoType :: GoEnv -> QName -> (GoEnv -> Maybe QName)-> Bool
+isGoType :: GoEnv -> QName -> (GoEnv -> Maybe QName) -> Bool
 isGoType env q p = Just q == p env
 
 -- | After all modules have been compiled, copy RTE modules and verify compiled modules.
@@ -296,11 +312,13 @@ goPostModule env _ isMain _ defs = do
   M.reportS "GO_COMPILER_DEBUG_LOG" 10 $ "m:" M.<+%> m
   M.reportS "GO_COMPILER_DEBUG_LOG" 10 $ "is:" M.<+%> is
 
+  let useSimpleInt = optUseSimpleInt (goEnvFlags env)
+
   let importDeclarations =
-        GoImportDeclarations $ (map goImportDecl is) ++ ["math/big", "helper"]
+        GoImportDeclarations $ (map goImportDecl is) ++ if useSimpleInt then ["uintHelper"] else ["math/big", "helper"]
   let importUsages =
         (map goImportUsg is)
-          ++ [(GoImportUsage "big"), (GoImportUsage "helper")]
+          ++ if useSimpleInt then [(GoImportUsage "uintHelper")] else [(GoImportUsage "big"), (GoImportUsage "helper")]
   let mod =
         Module m (importDeclarations : ([GoImportField] ++ importUsages)) es
 
@@ -492,6 +510,7 @@ definition' kit q d t ls = do
           M.reportS "GO_COMPILER_DEBUG_LOG" 25 $ "funBody':" M.<+%> funBody'
           M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "\ngiven:" M.<+%> given
           M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "\netaN:" M.<+%> etaN
+          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "\nfunction returnType:" M.<+%> returnType
 
           return $
             Just $
@@ -508,15 +527,6 @@ definition' kit q d t ls = do
       s <- render <$> prettyTCM q
       typeError $ NotImplemented $ "Higher inductive types (" ++ s ++ ")"
 
-    Datatype {} | is goEnvBool -> do
-      -- DEBUG_LOGGING
-      M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "\n COMPILING BOOL!:" M.<+%> d
-
-      name <- liftTCM $ fullName q
-      return (Just $ GoBool $ name)
-
-    --   -- DEBUG_LOGGING
-
     Datatype {} -> do
       -- DEBUG_LOGGING
       M.reportS "GO_COMPILER_DEBUG_LOG" 40 $ " data tupe2:" M.<+%> d
@@ -528,7 +538,14 @@ definition' kit q d t ls = do
 
       computeErasedConstructorArgs q
       name <- liftTCM $ fullName q
-      return (Just $ GoInterface $ name)
+
+      let resolveDataType def
+            | is goEnvBool = GoBool name
+            | is goEnvList = GoArray name []
+            | otherwise = GoInterface name
+
+      return $ Just $ resolveDataType (theDef d)
+
     Record {} -> do
       computeErasedConstructorArgs q
       return Nothing
@@ -555,11 +572,10 @@ definition' kit q d t ls = do
         -- DEBUG_LOGGING
         M.reportS "GO_COMPILER_DEBUG_LOG" 20 $ " goTypes:" M.<+%> goArg
 
-        let 
-          resolveConstructorType def
-            | is goEnvTrue = GoTrue name
-            | is goEnvFalse = GoFalse name
-            | otherwise = GoStruct name goArg
+        let resolveConstructorType def
+              | is goEnvTrue = GoTrue name
+              | is goEnvFalse = GoFalse name
+              | otherwise = GoStruct name goArg
 
         return $ Just $ resolveConstructorType (theDef d)
     AbstractDefn {} -> __IMPOSSIBLE__
@@ -703,10 +719,10 @@ compileTerm kit paramCount args t = do
   M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ " compile tx:" M.<+%> tx
   M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ " compile ts:" M.<+%> ts
 
-  compileTerm' t
+  compileTerm' (fst kit) t
   where
-    compileTerm' :: T.TTerm -> TCM Exp
-    compileTerm' tt = case tt of
+    compileTerm' :: GoEnv -> T.TTerm -> TCM Exp
+    compileTerm' env tt = case tt of
       T.TVar x -> return $ GoVar $ paramCount - x
       T.TDef q -> do
         d <- getConstInfo q
@@ -727,7 +743,7 @@ compileTerm kit paramCount args t = do
         M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "contructor"
 
         l <- fullName q
-        transformedArgs <- mapM compileTerm' (filter filterErased x)
+        transformedArgs <- mapM compileTermWithEnv (filter filterErased x)
         return $ GoCreateStruct l transformedArgs
       T.TApp (T.TDef q) x -> do
         -- DEBUG_LOGGING
@@ -735,13 +751,13 @@ compileTerm kit paramCount args t = do
         M.reportS "GO_COMPILER_DEBUG_LOG" 15 $ "q:" M.<+%> q
 
         name <- liftTCM $ fullName q
-        transformedArgs <- mapM compileTerm' (filter filterErased x)
+        transformedArgs <- mapM compileTermWithEnv (filter filterErased x)
         return $ GoMethodCall name (getTypelessMethodCallParams transformedArgs)
       T.TApp (T.TVar v1) x -> do
         -- DEBUG_LOGGING
         M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "function var function"
 
-        transformedArgs <- mapM compileTerm' (filter filterErased x)
+        transformedArgs <- mapM compileTermWithEnv (filter filterErased x)
         let typedMethodParam =
               getPiTypedMethodParams (args !! (paramCount - v1)) transformedArgs
         return $
@@ -749,9 +765,9 @@ compileTerm kit paramCount args t = do
             (MemberId (getVarName (paramCount - v1)))
             [typedMethodParam]
       T.TApp (T.TPrim T.PIf) [c, x, y] -> do
-        GoIf <$> (compileTerm' c) <*> (compileTerm' x) <*> (compileTerm' y)
+        GoIf <$> (compileTermWithEnv c) <*> (compileTermWithEnv x) <*> (compileTermWithEnv y)
       T.TApp (T.TPrim primType) [x, y] -> do
-        BinOp <$> (compileTerm' (T.TPrim primType)) <*> (compileTerm' x) <*> (compileTerm' y)
+        BinOp <$> (compileTermWithEnv (T.TPrim primType)) <*> (compileTermWithEnv x) <*> (compileTermWithEnv y)
       T.TApp t' xs | Just f <- getDef t' -> do
         used <- case f of
           Left q -> fromMaybe [] <$> getCompiledArgUse q
@@ -772,21 +788,21 @@ compileTerm kit paramCount args t = do
 
         unit
       T.TLam t -> do
-        compileTerm' t
+        compileTermWithEnv t
       T.TLet varDef nextExp -> do
         M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet first param:" M.<+%> (getVarName (paramCount + 1))
         M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet second param:" M.<+%> varDef
         M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet third param:" M.<+%> nextExp
 
-        GoLet 
+        GoLet
           <$> (return $ getVarName (paramCount + 1))
-          <*> (compileTerm' varDef)
+          <*> (compileTermWithEnv varDef)
           <*> (compileTerm kit (paramCount + 1) args nextExp)
       T.TLit l -> do
         -- DEBUG_LOGGING
         M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "TLit l:" M.<+%> l
 
-        return $ literal l
+        return $ literal env l
       T.TCon q -> do
         d <- getConstInfo q
 
@@ -795,13 +811,10 @@ compileTerm kit paramCount args t = do
         name <- liftTCM $ fullName q
 
         return $ comparethedef name (defName d)
-
         where
           comparethedef name defName
             | is goEnvTrue defName || is goEnvFalse defName = Const $ prettyShow name
             | otherwise = GoCreateStruct name []
-
-
       T.TCase sc ct def alts | T.CTData _ dt <- T.caseType ct -> do
         cases <- mapM (compileAlt kit paramCount args (paramCount - sc)) alts
         return $ GoSwitch (GoVar (paramCount - sc)) cases
@@ -810,12 +823,14 @@ compileTerm kit paramCount args t = do
         -- DEBUG_LOGGING
         M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "prim:" M.<+%!> p
 
-        return $ compilePrim p
+        return $ compilePrim env p
       T.TUnit -> unit
       T.TSort -> unit
       T.TErased -> unit
       T.TError T.TUnreachable -> return Undefined
-      T.TCoerce t -> compileTerm' t
+      T.TCoerce t -> compileTermWithEnv t
+      where
+        compileTermWithEnv = compileTerm' env
 
     getDef (T.TDef f) = Just (Left f)
     getDef (T.TCon c) = Just (Right c)
@@ -879,7 +894,7 @@ goTelApproximation env t usage = do
     <$> zipWithM (goTypeApproximation env) [0 ..] filteredArgs
     <*> (goTypeApproximationRet env) (length args) res
 
--- int is used for adding letter to start of variable name 
+-- int is used for adding letter to start of variable name
 goTypeApproximation :: GoEnv -> Int -> Type -> TCM TypeId
 goTypeApproximation env counter _type = goTypeApproximation' env counter _type False
 
@@ -909,14 +924,15 @@ goTypeApproximation' env counter _type shouldReturn = do approximate env counter
               NoAbs {} -> 0
         -- q - qname ; els - eliminations ordered left-to-right.
         Def q els
-          | is goEnvInteger -> return $ ConstructorType (getVarName counter) "*big.Int"
-          | is goEnvNat -> return $ ConstructorType (getVarName counter) "*big.Int"
+          | is goEnvInteger -> return $ ConstructorType (getVarName counter) $ if useSimpleInt then "uint64" else "*big.Int"
+          | is goEnvNat -> return $ ConstructorType (getVarName counter) $ if useSimpleInt then "uint64" else "*big.Int"
           | is goEnvBool -> return $ ConstructorType (getVarName counter) "bool"
           | otherwise -> do
             (MemberId name) <- liftTCM $ fullName q
             return $ ConstructorType (getVarName counter) name
           where
             is = isGoType env q
+            useSimpleInt = optUseSimpleInt (goEnvFlags env)
         Sort {} -> return EmptyType
         Var varN [] -> return $ GenericFunctionType (getVarName counter) ("T" ++ (show varN))
         _ -> return $ ConstructorType (getVarName counter) "interface{}"
@@ -937,6 +953,7 @@ applyReturnType retT exp = do
     BinOp x y z -> ReturnExpression (BinOp x y z) retT
     String x -> ReturnExpression (String x) retT
     Integer x -> ReturnExpression (Integer x) retT
+    SimpleInteger x -> ReturnExpression (SimpleInteger x) retT
     Const x -> ReturnExpression (Const x) retT
     GoInterface x -> GoInterface x
     GoStruct x y -> GoStruct x y
@@ -958,6 +975,7 @@ isLastExpression exp = case exp of
   BinOp x y z -> True
   String x -> True
   Integer x -> True
+  SimpleInteger x -> True
   Const x -> True
   _ -> False
 
@@ -966,18 +984,23 @@ outFile_ = do
   m <- curMName
   outFile (goMod m)
 
-literal :: Literal -> Exp
-literal lt = case lt of
-  (LitNat x) -> Integer x
+literal :: GoEnv -> Literal -> Exp
+literal env lt = case lt of
+  (LitNat x) -> if useSimpleInt then SimpleInteger x else Integer x
   (LitWord64 x) -> __IMPOSSIBLE__
   (LitFloat x) -> __IMPOSSIBLE__
   (LitString x) -> __IMPOSSIBLE__
   (LitChar x) -> __IMPOSSIBLE__
   (LitQName x) -> __IMPOSSIBLE__
   LitMeta {} -> __IMPOSSIBLE__
+  where
+    useSimpleInt = optUseSimpleInt (goEnvFlags env)
 
-compilePrim :: T.TPrim -> Exp
-compilePrim p = case p of
+compilePrim :: GoEnv -> T.TPrim -> Exp
+compilePrim env p = if optUseSimpleInt (goEnvFlags env) then compilePrimWithUint' p else compilePrim' p
+
+compilePrim' :: T.TPrim -> Exp
+compilePrim' p = case p of
   T.PEqI -> Const "helper.Equals"
   T.PSub -> Const "helper.Subtract"
   T.PMul -> Const "helper.Multiply"
@@ -993,8 +1016,34 @@ compilePrim p = case p of
   T.PRem -> Const "PRem"
   T.PQuot -> Const "PQuot"
   T.PAdd64 -> Const "helper.Add"
-  T.PSub64 -> Const "helper.Minus"
+  T.PSub64 -> Const "helper.Subtract"
   T.PMul64 -> Const "helper.Multiply"
+  T.PRem64 -> Const "PRem64"
+  T.PQuot64 -> Const "PQuot64"
+  T.PITo64 -> Const "PITo64"
+  T.P64ToI -> Const "P64ToI"
+  T.PSeq -> Const "PSeq"
+  T.PIf -> __IMPOSSIBLE__
+
+compilePrimWithUint' :: T.TPrim -> Exp
+compilePrimWithUint' p = case p of
+  T.PEqI -> Const "uintHelper.UintEquals"
+  T.PSub -> Const "uintHelper.UintSubtract"
+  T.PMul -> Const "uintHelper.UintMultiply"
+  T.PAdd -> Const "uintHelper.UintAdd"
+  T.PGeq -> Const "uintHelper.UintMoreOrEquals"
+  T.PLt -> Const "uintHelper.UintLess"
+  T.PEqC -> Const "=="
+  T.PEqS -> Const "=="
+  T.PEq64 -> Const "uintHelper.UintEquals"
+  T.PLt64 -> Const "uintHelper.UintLess"
+  T.PEqF -> Const "PEqF"
+  T.PEqQ -> Const "PEqQ"
+  T.PRem -> Const "PRem"
+  T.PQuot -> Const "PQuot"
+  T.PAdd64 -> Const "uintHelper.UintAdd"
+  T.PSub64 -> Const "uintHelper.UintSubtract"
+  T.PMul64 -> Const "uintHelper.UintMultiply"
   T.PRem64 -> Const "PRem64"
   T.PQuot64 -> Const "PQuot64"
   T.PITo64 -> Const "PITo64"

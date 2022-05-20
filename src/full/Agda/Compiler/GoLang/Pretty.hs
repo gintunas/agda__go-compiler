@@ -30,9 +30,10 @@ instance Pretty Go.Exp where
       Go.Null -> text "nil"
       Go.String s -> "\"" <+> (text $ show s) <+> "\""
       Go.Char c -> "\'" <+> (text $ show c) <+> "\'"
+      Go.SimpleInteger n -> text $ show n
       Go.Integer n -> (text "big.NewInt") <+> (T.parens $ text $ show n)
       Go.Double d -> (text "big.NewFloat") <+> (T.parens $ text $ show d)
-      -- no lambda
+      -- no lambda because it is converted to function 
 
       Go.GoBool id -> "type" <+> pretty id <+> "= bool"
       Go.GoVar v -> textAndGetVarName v
@@ -42,12 +43,14 @@ instance Pretty Go.Exp where
       Go.GoFunction signatures body -> (vcat $ map pretty signatures) <+> (pretty body) <+> (text $ concat $ replicate (length signatures) "}\n")
       Go.GoTrue id -> "const" <+> pretty id <+> "= true"
       Go.GoFalse id -> "const" <+> pretty id <+> "= false"
+      Go.GoArray id xs -> "type" <+> pretty id <+> "=" <+> (text $ show xs)
 
       Go.GoStruct id elems -> "type" <+> pretty id <+> "struct " <+> (T.braces (vcat $ map pretty elems))
       Go.GoStructElement localId typeId -> "_" <+> pretty localId <+> pretty typeId <+> T.semi
       Go.GoCreateStruct name params -> (pretty name) <+> T.lbrace <+> (joinStructParams (map pretty params)) <+> "}"
       
       Go.GoIf a b c -> "if (" <+> (pretty a) <+> ") {\n" <+> (pretty b) <+> "\n} else {\n" <+> pretty c <+> "\n}\n"
+      -- OLD IMPLEMENTATION
       -- Go.GoSwitch v cases -> "switch type_" <+> (pretty v) <+> (text "  := ") <+> (pretty v) <+> (text ".(type) {\n") <+> (vcat $ map pretty cases) <+> "\ndefault:\n_ = type_"<+> (pretty v) <+> ";\n panic(\"Unreachable\");\n}"
       Go.GoSwitch v cases -> "switch " <+> (pretty v) <+> (text "{\n") <+> (vcat $ map pretty cases) <+> "\ndefault:" <+> "\n panic(\"Unreachable\")\n}"
       Go.GoCase name switchVar paramsStart paramCount exps -> "\ncase " <+> (pretty name) <+> spaceWrap (T.colon) <+> (hsep $ map (createCaseParam paramsStart switchVar) (createCaseList paramCount)) <+> (vcat $ map pretty exps)
@@ -56,6 +59,7 @@ instance Pretty Go.Exp where
       Go.GoMethodCall name params -> (pretty name) <+> (hsep $ map pretty params)
       Go.GoMethodCallParam exp Go.EmptyType -> T.parens (pretty exp)
       Go.GoMethodCallParam exp typeId -> "(" <+> (pretty exp) <+> ".(" <+> pretty typeId <+> "))"
+      -- OLD IMPLEMENTATION
       -- Go.ReturnExpression exp t -> "return helper.Id(" <+> (pretty exp) <+> ").(" <+> pretty t <+> ")"
       Go.ReturnExpression exp t -> "return " <+> (pretty exp)
       

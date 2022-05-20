@@ -57,6 +57,7 @@ data Exp
   | String Text
   | Char Char
   | Integer Integer
+  | SimpleInteger Integer
   | Double Double
   | Lambda Nat Exp
 
@@ -68,6 +69,7 @@ data Exp
   | GoInterface MemberId -- interface globalus name
   | GoFunction [GoFunctionSignature] Exp -- funkcijos vardas, parametras, return type, vidinė funkcija/switch statement.
   -- todo kaip išsiaiškint pilną return type (einam per visas vidines funkcijas?)
+  | GoArray MemberId [(Comment, Exp)]
   
   | GoStruct MemberId [TypeId] -- struktūros name ir [Exp] yra struktūros elementai
   | GoStructElement LocalId TypeId -- struktūros elementas. name tiesiog integer + tipas

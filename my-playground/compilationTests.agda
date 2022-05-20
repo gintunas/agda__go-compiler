@@ -1,53 +1,57 @@
 module compilationTests where
 
 -- open import Agda.Builtin.Nat
+-- open import Agda.Builtin.Int
 open import Agda.Builtin.Bool
 
 -------------------------------------------------------------------------------
 
 -- SIMPLE BOOL OPERATIONS
 
--- and : Bool → Bool → Bool
--- and true true = true
--- and _ _ = false
+and : Bool → Bool → Bool
+and true true = true
+and _ _ = false
 
 -- xor : Bool → Bool → Bool
 -- xor true false = true
 -- xor false true = true
 -- xor _ _ = false
 
--- DOESNT WORK
+-- not : Bool → Bool
+-- not true = false
+-- not false = true
+
+-- DOESNT WORK BECAUSE OF LET PARSING
 -- or : Bool → Bool → Bool
 -- or true _ = true
 -- or _ true = true
 -- or _ _ = false
 
-not : Bool → Bool
-not true = false
-not false = true
-
 -------------------------------------------------------------------------------
-
--- SIMPLE ADD
 
 -- add : Nat → Nat → Nat
 -- add n zero      = n
 -- add n (suc m)   = add (suc n) m
 
+-- add : Int → Int → Int
+-- add (pos n) (pos m) = pos (n + m)
+-- add (pos n) (negsuc m) = pos m
+-- add (negsuc n) (pos m) = negsuc m
+-- add (negsuc n) (negsuc m) = pos m 
+
+-- DOESNT WORK BECAUSE OF LET PARSING
+-- subtract : Nat → Nat → Nat
+-- subtract zero _ = zero
+-- subtract n zero = n
+-- subtract n (suc m) = subtract (suc n) m
+
 -------------------------------------------------------------------------------
 
--- open import Agda.Builtin.List
-
--- addLists : List Nat → List Nat → List Nat
--- addLists [] ys = ys
--- addLists (x ∷ xs) ys = x ∷ (addLists xs ys)
-
--- mapList : (Nat → Nat) → List Nat → List Nat
--- mapList f xs = PMapList f xs []
---     where
---     PMapList : (Nat → Nat) → List Nat → List Nat → List Nat
---     PMapList f [] ys = ys
---     PMapList f (x ∷ xs) ys = PMapList f xs ( addLists ys ( f x ∷ [] ) )
+-- FIBONACCI
+-- fib : Nat → Nat
+-- fib 0 = 0
+-- fib 1 = 1
+-- fib (suc (suc n)) = fib (suc n) + fib n
 
 -------------------------------------------------------------------------------
 
@@ -79,6 +83,32 @@ not false = true
 
 -- invalid_identity : Nat
 -- invalid_identity = identity Nat "My-type"
+
+-------------------------------------------------------------------------------
+
+-- RECORDS
+
+-- record Point : Set where
+--     field x : Nat
+--     field y : Nat
+
+-- mkPoint : Nat -> Nat -> Point
+-- mkPoint a b = record{ x = a; y = b }
+
+-------------------------------------------------------------------------------
+
+-- open import Agda.Builtin.List
+
+-- addLists : List Nat → List Nat → List Nat
+-- addLists [] ys = ys
+-- addLists (x ∷ xs) ys = x ∷ (addLists xs ys)
+
+-- mapList : (Nat → Nat) → List Nat → List Nat
+-- mapList f xs = PMapList f xs []
+--     where
+--     PMapList : (Nat → Nat) → List Nat → List Nat → List Nat
+--     PMapList f [] ys = ys
+--     PMapList f (x ∷ xs) ys = PMapList f xs ( addLists ys ( f x ∷ [] ) )
 
 -------------------------------------------------------------------------------
 
@@ -120,17 +150,6 @@ not false = true
 -- secondVectorElement = v1 !!v (suc zero)
 -- INVALID
 -- thirdVectorElement = v1 !!v (suc (suc zero))
-
--------------------------------------------------------------------------------
-
--- RECORDS
-
--- record Point : Set where
---     field x : Nat
---     field y : Nat
-
--- mkPoint : Nat -> Nat -> Point
--- mkPoint a b = record{ x = a; y = b }
 
 -------------------------------------------------------------------------------
 

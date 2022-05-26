@@ -1,0 +1,48 @@
+\documentclass{article}
+\usepackage{agda}
+
+\begin{document}
+
+Example of text in latex that can be \textit{italic} or \textbf{bold}.
+
+Or any other, which is supported by LaTeX.
+
+\begin{code}[agda boolean and function]%
+\>[0]\AgdaKeyword{module}\AgdaSpace{}%
+\AgdaModule{compilationTestsLatex}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Agda.Builtin.Bool}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaComment{--\ Agda\ boolean\ AND\ function:}\<%
+\\
+\>[0]\AgdaFunction{and}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{Bool}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{Bool}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{Bool}\<%
+\\
+\>[0]\AgdaFunction{and}\AgdaSpace{}%
+\AgdaInductiveConstructor{true}\AgdaSpace{}%
+\AgdaInductiveConstructor{true}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{true}\<%
+\\
+\>[0]\AgdaCatchallClause{\AgdaFunction{and}}\AgdaSpace{}%
+\AgdaCatchallClause{\AgdaSymbol{\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaCatchallClause{\AgdaSymbol{\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{false}\<%
+\\
+\>[0]\<%
+\end{code}
+
+\end{document}

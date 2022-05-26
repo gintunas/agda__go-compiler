@@ -1,4 +1,4 @@
-module Agda.Compiler.GoLang.Syntax where
+module Agda.Compiler.Golang.Syntax where
 
 import Agda.Syntax.Common (Nat)
 import Agda.Utils.List1 (List1, (<|), pattern (:|))

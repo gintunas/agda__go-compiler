@@ -1,0 +1,8 @@
+digraph dependencies {
+   m0[label="compilationTestsSimple"];
+   m1[label="Agda.Builtin.Bool"];
+   m2[label="Agda.Primitive"];
+   m0 -> m1;
+   m0 -> m2;
+   m1 -> m2;
+}

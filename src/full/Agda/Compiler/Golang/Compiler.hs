@@ -1,5 +1,5 @@
 -- | Main module for Go backend.
-module Agda.Compiler.GoLang.Compiler where
+module Agda.Compiler.Golang.Compiler where
 
 -- import System.Process     ( callCommand )
 
@@ -9,9 +9,9 @@ import Agda.Compiler.Backend
     Recompile (..),
   )
 import Agda.Compiler.Common hiding (compileDir)
-import qualified Agda.Compiler.GoLang.Misc as M
-import qualified Agda.Compiler.GoLang.Pretty as GoPretty
-import Agda.Compiler.GoLang.Syntax
+import qualified Agda.Compiler.Golang.Misc as M
+import qualified Agda.Compiler.Golang.Pretty as GoPretty
+import Agda.Compiler.Golang.Syntax
   ( Exp
       ( BinOp,
         Char,
@@ -540,7 +540,7 @@ definition' kit q d t ls = do
       name <- liftTCM $ fullName q
 
       let resolveDataType def
-            | is goEnvBool = GoBool name
+            -- | is goEnvBool = GoBool name
             | is goEnvList = GoArray name []
             | otherwise = GoInterface name
 
@@ -926,7 +926,7 @@ goTypeApproximation' env counter _type shouldReturn = do approximate env counter
         Def q els
           | is goEnvInteger -> return $ ConstructorType (getVarName counter) $ if useSimpleInt then "uint64" else "*big.Int"
           | is goEnvNat -> return $ ConstructorType (getVarName counter) $ if useSimpleInt then "uint64" else "*big.Int"
-          | is goEnvBool -> return $ ConstructorType (getVarName counter) "bool"
+          -- | is goEnvBool -> return $ ConstructorType (getVarName counter) "bool"
           | otherwise -> do
             (MemberId name) <- liftTCM $ fullName q
             return $ ConstructorType (getVarName counter) name
@@ -935,7 +935,7 @@ goTypeApproximation' env counter _type shouldReturn = do approximate env counter
             useSimpleInt = optUseSimpleInt (goEnvFlags env)
         Sort {} -> return EmptyType
         Var varN [] -> return $ GenericFunctionType (getVarName counter) ("T" ++ (show varN))
-        _ -> return $ ConstructorType (getVarName counter) "interface{}"
+        _ -> return $ ConstructorType (getVarName counter) "any"
 
 isSortType :: Type -> Bool
 isSortType t = do

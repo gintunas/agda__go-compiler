@@ -1,8 +1,8 @@
-module Agda.Compiler.GoLang.Pretty where
+module Agda.Compiler.Golang.Pretty where
 
 import qualified Agda.Utils.Haskell.Syntax as HS
 import Data.List ( intercalate )
-import qualified Agda.Compiler.GoLang.Syntax as Go
+import qualified Agda.Compiler.Golang.Syntax as Go
 import Text.PrettyPrint (empty)
 import qualified Text.PrettyPrint as T
 import Agda.Utils.Hash
@@ -38,7 +38,7 @@ instance Pretty Go.Exp where
       Go.GoBool id -> "type" <+> pretty id <+> "= bool"
       Go.GoVar v -> textAndGetVarName v
       Go.GoLet name val exp -> (text name) <+> ":=" <+> (pretty val) <+> "\n" <+> (pretty exp)
-      Go.GoInterface id -> "type" <+> pretty id <+> " = interface{}"
+      Go.GoInterface id -> "type" <+> pretty id <+> " = any"
       Go.GoFunction signatures (Go.GoSwitch a b) -> (vcat $ map pretty signatures) <+> (pretty (Go.GoSwitch a b)) <+> (text $ concat $ replicate (length signatures) "}\n")
       Go.GoFunction signatures body -> (vcat $ map pretty signatures) <+> (pretty body) <+> (text $ concat $ replicate (length signatures) "}\n")
       Go.GoTrue id -> "const" <+> pretty id <+> "= true"

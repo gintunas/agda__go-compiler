@@ -1,4 +1,4 @@
-module Agda.Compiler.GoLang.Misc where
+module Agda.Compiler.Golang.Misc where
 
 import qualified Agda.Syntax.Treeless as T
 
@@ -8,7 +8,7 @@ import Agda.Utils.Pretty
 
 import Data.Char (isAsciiUpper, isLetter, isDigit, ord)
 
--- import qualified Agda.Compiler.GoLang.Syntax as GS
+-- import qualified Agda.Compiler.Golang.Syntax as GS
 -- import Agda.Syntax.Abstract.Name ( QName )
 
 divider = "\n================================================================================\n"

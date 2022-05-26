@@ -45,6 +45,7 @@ data TypeId
   | FunctionReturnElement String
   | EmptyFunctionParameter
   | EmptyType
+  | AnyType
   | PiType TypeId TypeId
   deriving (Eq, Ord, Show)
 
@@ -61,14 +62,17 @@ data Exp
   | Double Double
   | Lambda Nat Exp
 
-  | GoBool MemberId
+  -- It does nothing
+  -- | GoBool MemberId
   | GoTrue MemberId
   | GoFalse MemberId
   | GoVar Nat
-  | GoLet String Exp Exp
+  | GoLetDeclaration String -- varName :=
+  | GoLet String Exp Exp -- varName letBodyExp expWithBoundedLetValue
   | GoInterface MemberId -- interface globalus name
   | GoFunction [GoFunctionSignature] Exp -- funkcijos vardas, parametras, return type, vidinė funkcija/switch statement.
   -- todo kaip išsiaiškint pilną return type (einam per visas vidines funkcijas?)
+  | GoIIFE Exp -- immediately invoked function expression
   | GoArray MemberId [(Comment, Exp)]
   
   | GoStruct MemberId [TypeId] -- struktūros name ir [Exp] yra struktūros elementai
@@ -87,11 +91,11 @@ data Exp
   | PlainGo String -- ^ Arbitrary GO code.
   deriving (Show, Eq)
 
+-- Outer and Inner signatures because function is curried
 data GoFunctionSignature
-  = OuterSignature MemberId [String] TypeId [TypeId] TypeId
-  | -- name, parameter, return parameters (func...), final return type.
-    InnerSignature TypeId [TypeId] TypeId
-  -- parameter, return parameters (func...), final return type.
+  = OuterSignature MemberId [String] TypeId [TypeId] TypeId       -- name, parameter, return parameters (func...), final return type.
+  | InnerSignature TypeId [TypeId] TypeId                         -- parameter, return parameters (func...), final return type.
+  | AnonymousSignature TypeId
   deriving (Eq, Ord, Show)
 
 newtype Comment = Comment String

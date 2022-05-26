@@ -18,11 +18,13 @@ import Agda.Compiler.Golang.Syntax
         Const,
         Global,
         GoArray,
-        GoBool,
+        -- It does nothing
+        -- GoBool,
         GoCase,
         GoCreateStruct,
         GoFalse,
         GoFunction,
+        GoIIFE,
         GoIf,
         GoInterface,
         GoLet,
@@ -44,7 +46,8 @@ import Agda.Compiler.Golang.Syntax
     GlobalId (GlobalId),
     GoFunctionSignature
       ( InnerSignature,
-        OuterSignature
+        OuterSignature,
+        AnonymousSignature
       ),
     GoImports
       ( GoImportDeclarations,
@@ -62,7 +65,8 @@ import Agda.Compiler.Golang.Syntax
         FunctionType,
         GenericFunctionType,
         PiType,
-        TypeId
+        TypeId, 
+        AnyType
       ),
     modName,
   )
@@ -126,7 +130,7 @@ import Data.Char
     isSpace,
     ord,
   )
-import Data.Foldable (forM_)
+import Data.Foldable (forM_, or)
 import Data.List (intercalate)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
@@ -143,6 +147,7 @@ import System.FilePath
     (</>),
   )
 import Prelude hiding (writeFile)
+import qualified Agda.Syntax.Treeless as T
 
 --------------------------------------------------
 -- Entry point into the compiler
@@ -203,7 +208,9 @@ goCommandLineFlags =
 -- change from module to module.
 data GoEnv = GoEnv
   { goEnvFlags :: GoFlags,
-    goEnvBool,
+    -- It does nothing now since everything's type is any (find other entries related to this in all go compiler files with "it does nothing" term)
+    -- goEnvBool,
+    -- It lets pattern match on bools (type any) since there are literal values true and false
     goEnvTrue,
     goEnvFalse,
     goEnvNat,
@@ -220,7 +227,8 @@ compileDir = liftIO getHomeDirectory
 --- Top-level compilation ---
 goPreCompile :: GoFlags -> TCM GoEnv
 goPreCompile flags = do
-  gbool <- getBuiltinName builtinBool
+  -- It does nothing now
+  -- gbool <- getBuiltinName builtinBool
   gtrue <- getBuiltinName builtinTrue
   gfalse <- getBuiltinName builtinFalse
   gnat <- getBuiltinName builtinNat
@@ -230,7 +238,8 @@ goPreCompile flags = do
   return $
     GoEnv
       { goEnvFlags = flags,
-        goEnvBool = gbool,
+        -- It does nothing now
+        -- goEnvBool = gbool,
         goEnvTrue = gtrue,
         goEnvFalse = gfalse,
         goEnvNat = gnat,
@@ -540,8 +549,8 @@ definition' kit q d t ls = do
       name <- liftTCM $ fullName q
 
       let resolveDataType def
-            -- | is goEnvBool = GoBool name
-            | is goEnvList = GoArray name []
+            -- TODO: compile list type
+            -- | is goEnvList = GoArray name []
             | otherwise = GoInterface name
 
       return $ Just $ resolveDataType (theDef d)
@@ -789,15 +798,38 @@ compileTerm kit paramCount args t = do
         unit
       T.TLam t -> do
         compileTermWithEnv t
-      T.TLet varDef nextExp -> do
-        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet first param:" M.<+%> (getVarName (paramCount + 1))
-        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet second param:" M.<+%> varDef
-        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet third param:" M.<+%> nextExp
+      T.TLet body expWithBoundedLet -> do
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet varName:" M.<+%> (getVarName nextParamNum)
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet body:" M.<+%> body
+        M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet expWithBoundedLet:" M.<+%> expWithBoundedLet
 
-        GoLet
-          <$> (return $ getVarName (paramCount + 1))
-          <*> (compileTermWithEnv varDef)
-          <*> (compileTerm kit (paramCount + 1) args nextExp)
+        bodyComp <- compileTermWithEnv body
+
+        if isLetBodyPrimitive body
+          then GoLet 
+                <$> return letVarName
+                <*> (compileTermWithEnv body)
+                -- <*> (return Null)
+                <*> letBoundedBlock
+          else GoLet 
+                <$> return letVarName
+                <*> (return $ GoIIFE $ GoFunction [(AnonymousSignature AnyType)] bodyComp)
+                -- <*> (return Null)
+                <*> letBoundedBlock 
+        where
+          nextParamNum = paramCount + 1
+          letVarName = getVarName nextParamNum
+          letBoundedBlock = compileTerm kit nextParamNum args expWithBoundedLet
+
+          isLetBodyPrimitive :: T.TTerm -> Bool
+          isLetBodyPrimitive term = 
+            -- | is goEnvTrue defName || is goEnvFalse defName = Const $ prettyShow name
+            -- | otherwise = GoCreateStruct name []
+            case term of
+              T.TCon q -> True
+              T.TVar x -> True
+              _ -> False
+        
       T.TLit l -> do
         -- DEBUG_LOGGING
         M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "TLit l:" M.<+%> l

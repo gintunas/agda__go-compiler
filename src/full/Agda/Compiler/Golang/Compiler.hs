@@ -517,9 +517,9 @@ definition' kit q d t ls = do
           -- DEBUG_LOGGING
           M.reportS "GO_COMPILER_DEBUG_LOG" 25 $ "functionSignature:" M.<+%!> functionSignature
           M.reportS "GO_COMPILER_DEBUG_LOG" 25 $ "funBody':" M.<+%> funBody'
-          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "\ngiven:" M.<+%> given
-          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "\netaN:" M.<+%> etaN
-          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "\nfunction returnType:" M.<+%> returnType
+          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "given:" M.<+%> given
+          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "etaN:" M.<+%> etaN
+          M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "function returnType:" M.<+%> returnType
 
           return $
             Just $
@@ -806,16 +806,8 @@ compileTerm kit paramCount args t = do
         bodyComp <- compileTermWithEnv body
 
         if isLetBodyPrimitive body
-          then GoLet 
-                <$> return letVarName
-                <*> (compileTermWithEnv body)
-                -- <*> (return Null)
-                <*> letBoundedBlock
-          else GoLet 
-                <$> return letVarName
-                <*> (return $ GoIIFE $ GoFunction [(AnonymousSignature AnyType)] bodyComp)
-                -- <*> (return Null)
-                <*> letBoundedBlock 
+          then createLetExp $ compileTermWithEnv body
+          else createLetExp $ return $ GoIIFE $ GoFunction [(AnonymousSignature AnyType)] $ applyReturnType AnyType bodyComp
         where
           nextParamNum = paramCount + 1
           letVarName = getVarName nextParamNum
@@ -829,6 +821,12 @@ compileTerm kit paramCount args t = do
               T.TCon q -> True
               T.TVar x -> True
               _ -> False
+
+          createLetExp expBody = 
+            GoLet 
+              <$> return letVarName
+              <*> expBody
+              <*> letBoundedBlock 
         
       T.TLit l -> do
         -- DEBUG_LOGGING

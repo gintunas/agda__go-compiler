@@ -10,7 +10,6 @@ import Agda.Compiler.Backend
   )
 import Agda.Compiler.Common hiding (compileDir)
 import qualified Agda.Compiler.Golang.Misc as M
-import qualified Agda.Compiler.Golang.Pretty as GoPretty
 import Agda.Compiler.Golang.Syntax
   ( Exp
       ( BinOp,
@@ -70,7 +69,6 @@ import Agda.Compiler.Golang.Syntax
       ),
     modName,
   )
-import qualified Agda.Compiler.MAlonzo.Pragmas as HP
 import Agda.Compiler.ToTreeless
 import Agda.Compiler.Treeless.EliminateDefaults
 import Agda.Compiler.Treeless.EliminateLiteralPatterns
@@ -92,7 +90,6 @@ import Agda.Syntax.Internal
 import Agda.Syntax.Literal (Literal (..))
 import qualified Agda.Syntax.Treeless as T
 import Agda.TypeChecking.Monad
-import Agda.TypeChecking.Monad.Base (returnTCMT)
 import Agda.TypeChecking.Pretty
 import Agda.TypeChecking.Primitive (getBuiltinName)
 import Agda.TypeChecking.Reduce (instantiateFull)
@@ -149,7 +146,6 @@ import System.FilePath
     (</>),
   )
 import Prelude hiding (writeFile)
-import qualified Agda.Syntax.Treeless as T
 
 --------------------------------------------------
 -- Entry point into the compiler
@@ -450,12 +446,10 @@ definition kit (q, d) = do
 definition' ::
   EnvWithOpts -> QName -> Definition -> Type -> GoQName -> TCM (Maybe Exp)
 definition' kit q d t ls = do
-  pragma <- liftTCM $ HP.getHaskellPragma q
   let is = isGoType (fst kit) q
 
   M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "DEFINITION ARGS:"
   M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "q: " M.<+%> q
-  M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "pragma: " M.<+%> pragma
   M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "d: " M.<+%> d
   M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "t: " M.<+%> t
   M.reportS "GO_COMPILER_DEBUG_LOG" 50 $ "ls: " M.<+%> ls
@@ -897,7 +891,7 @@ writeModule m = do
   M.reportS "GO_COMPILER_DEBUG_LOG" 4 $ "out: :" M.<+%> out
   M.reportS "GO_COMPILER_DEBUG_LOG" 10 $ "module: :" <+> (multiLineText (show m))
 
-  liftIO (writeFile out (GoPretty.prettyPrintGo m))
+  liftIO (writeFile out (show.pretty m))
 
 outFile :: GlobalId -> TCM FilePath
 outFile m = do

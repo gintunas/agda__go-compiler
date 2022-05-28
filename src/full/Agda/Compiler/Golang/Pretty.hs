@@ -1,25 +1,25 @@
 module Agda.Compiler.Golang.Pretty where
 
-import qualified Agda.Utils.Haskell.Syntax as HS
-import Data.List ( intercalate )
 import qualified Agda.Compiler.Golang.Syntax as Go
-import qualified Text.PrettyPrint as T
+import Agda.Compiler.MAlonzo.Encode
+import Agda.Syntax.Common (Nat)
 import Agda.Utils.Hash
 import Agda.Utils.Impossible
-import Agda.Syntax.Common ( Nat )
-import Agda.Compiler.MAlonzo.Encode
 import Agda.Utils.Pretty
-import Data.Char ( chr, ord )
+import Data.Char (chr, ord)
+import Data.List (intercalate)
+import qualified Text.PrettyPrint as T
 
 prettyPrintGo :: Pretty a => a -> String
 prettyPrintGo = show . pretty
 
 instance Pretty Go.Module where
   pretty (Go.Module (Go.GlobalId m) imports exports) =
-    cat [ "package" <+> pretty (Go.GlobalId (tail m))
-    , cat $ map pretty imports
-    , vcat $ map pretty exports
-    ]
+    cat
+      [ "package" <+> pretty (Go.GlobalId (tail m)),
+        cat $ map pretty imports,
+        vcat $ map pretty exports
+      ]
 
 instance Pretty Go.Exp where
   prettyPrec pr e =
@@ -31,32 +31,27 @@ instance Pretty Go.Exp where
       Go.SimpleInteger n -> text $ show n
       Go.Integer n -> (text "big.NewInt") <+> (T.parens $ text $ show n)
       Go.Double d -> (text "big.NewFloat") <+> (T.parens $ text $ show d)
-      -- no lambda because it is converted to function 
+      -- no lambda because it is converted to function
 
       -- It does nothing now
       -- Go.GoBool id -> "type" <+> pretty id <+> "= bool"
       Go.GoVar v -> textAndGetVarName v
       Go.GoLet varName expBody boundedExp -> "\n" <+> text varName <+> ":=" <+> pretty expBody <+> pretty boundedExp
-      
       Go.GoInterface id -> "type" <+> pretty id <+> "= any"
       Go.GoFunction signatures (Go.GoSwitch a b) -> (hsep $ map pretty signatures) <+> (pretty (Go.GoSwitch a b)) <+> (hsep $ replicate (length signatures) T.rbrace)
       Go.GoFunction signatures body -> (hsep $ map pretty signatures) <+> (pretty body) <+> (hsep $ replicate (length signatures) T.rbrace)
       Go.GoIIFE exp -> pretty exp <> "()"
-
       Go.GoTrue id -> "const" <+> pretty id <+> "= true"
       Go.GoFalse id -> "const" <+> pretty id <+> "= false"
       Go.GoArray id xs -> "type" <+> pretty id <+> "=" <+> (text $ show xs)
-
       Go.GoStruct id elems -> "type" <+> pretty id <+> "struct" <+> (T.braces (hsep $ map pretty elems))
       Go.GoStructElement localId typeId -> "_" <+> pretty localId <+> pretty typeId <+> T.semi
       Go.GoCreateStruct name params -> (pretty name) <+> T.lbrace <+> (joinStructParams (map pretty params)) <+> T.rbrace
-
       Go.GoIf a b c -> "if (" <+> (pretty a) <+> ") {" <+> (pretty b) <+> "} else {" <+> pretty c <+> T.rbrace
       -- OLD IMPLEMENTATION
       -- Go.GoSwitch v cases -> "switch type_" <+> (pretty v) <+> (text "  := ") <+> (pretty v) <+> (text ".(type) {\n") <+> (hsep $ map pretty cases) <+> "\ndefault:\n_ = type_"<+> (pretty v) <+> ";\n panic(\"Unreachable\");\n}"
       Go.GoSwitch v cases -> "\nswitch" <+> (pretty v) <+> T.lbrace <+> (hsep $ map pretty cases) <+> "\ndefault" <+> T.colon <+> "panic(\"Unreachable\")}"
       Go.GoCase name switchVar paramsStart paramCount exps -> "\ncase" <+> (pretty name) <+> T.colon <+> (hsep $ map (createCaseParam paramsStart switchVar) (createCaseList paramCount)) <+> (hsep $ map pretty exps)
-
       Go.GoMethodCall name [] -> (pretty name) <+> "()"
       Go.GoMethodCall name params -> (pretty name) <+> (hsep $ map pretty params)
       Go.GoMethodCallParam exp Go.EmptyType -> T.parens (pretty exp)
@@ -64,7 +59,6 @@ instance Pretty Go.Exp where
       -- OLD IMPLEMENTATION
       -- Go.ReturnExpression exp t -> "return helper.Id(" <+> (pretty exp) <+> ").(" <+> pretty t <+> T.rparen
       Go.ReturnExpression exp t -> "return" <+> (pretty exp)
-
       Go.BinOp a b c -> (pretty a) <+> T.lparen <+> (T.parens (pretty b)) <+> T.comma <+> (T.parens (pretty c)) <+> T.rparen
       Go.Const s -> text s
       _ -> text ""
@@ -72,18 +66,18 @@ instance Pretty Go.Exp where
 joinStructParams :: [Doc] -> Doc
 joinStructParams [] = T.empty
 joinStructParams [x] = x <+> (joinStructParams [])
-joinStructParams (x:xs) = x <+> T.comma <+> (joinStructParams xs)
+joinStructParams (x : xs) = x <+> T.comma <+> (joinStructParams xs)
 
 createCaseParam :: Nat -> Nat -> Nat -> Doc
-createCaseParam paramStart switchVar paramId = (textAndGetVarName (paramStart + paramId)) <+> ":= type_" <+> (textAndGetVarName switchVar) <+> "." <+> (textAndGetVarName (paramId - 1)) <+> "; _ =" <+> (textAndGetVarName (paramStart + paramId))<+> ";"
+createCaseParam paramStart switchVar paramId = (textAndGetVarName (paramStart + paramId)) <+> ":= type_" <+> (textAndGetVarName switchVar) <+> "." <+> (textAndGetVarName (paramId - 1)) <+> "; _ =" <+> (textAndGetVarName (paramStart + paramId)) <+> ";"
 
 instance Pretty Go.MemberId where
-  pretty (Go.MemberId  s) = text s
+  pretty (Go.MemberId s) = text s
   pretty (Go.MemberIndex i c) = text ""
 
 createCaseList :: Nat -> [Nat]
 createCaseList 0 = []
-createCaseList n = [1..n]
+createCaseList n = [1 .. n]
 
 getVarName :: Nat -> String
 getVarName n = [chr ((ord 'A') + n)]

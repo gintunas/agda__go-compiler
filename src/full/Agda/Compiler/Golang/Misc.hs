@@ -1,12 +1,10 @@
 module Agda.Compiler.Golang.Misc where
 
-import qualified Agda.Syntax.Treeless as T
-
 import qualified Agda.Compiler.Backend as CB
+import qualified Agda.Syntax.Treeless as T
 import Agda.TypeChecking.Monad.Base
 import Agda.Utils.Pretty
-
-import Data.Char (isAsciiUpper, isLetter, isDigit, ord)
+import Data.Char (isAsciiUpper, isDigit, isLetter, ord)
 
 divider = "\n================================================================================\n"
 
@@ -18,7 +16,7 @@ divider = "\n===================================================================
 
 reportS :: CB.MonadDebug m => CB.VerboseKey -> CB.VerboseLevel -> TCM Doc -> m ()
 reportS vk vl tdoc = do
-  CB.reportS vk vl $ "\nGO_COMPILER_DEBUG_LOG\nV_KEY:" <+> (text.show) vk <+> "\nV_LEVEL:" <+> (text.show) vl <+> divider
+  CB.reportS vk vl $ "\nGO_COMPILER_DEBUG_LOG\nV_KEY:" <+> (text . show) vk <+> "\nV_LEVEL:" <+> (text . show) vl <+> divider
   CB.reportS vk vl tdoc
   CB.reportS vk vl $ divider
 
@@ -33,7 +31,7 @@ mapBoolToArgUsage :: Bool -> T.ArgUsage
 mapBoolToArgUsage b = if b then T.ArgUnused else T.ArgUsed
 
 encode :: [Char] -> String
-encode []              = []
+encode [] = []
 encode name@(c : tail) = do
   if isAsciiUpper c then encodeChars (name) else encodeChars $ "F_" <> name
 

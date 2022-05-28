@@ -61,10 +61,10 @@ data Exp
   | SimpleInteger Integer
   | Double Double
   | Lambda Nat Exp
+  | -- It does nothing
 
-  -- It does nothing
-  -- | GoBool MemberId
-  | GoTrue MemberId
+    -- | GoBool MemberId
+    GoTrue MemberId
   | GoFalse MemberId
   | GoVar Nat
   | GoLetDeclaration String -- varName :=
@@ -74,27 +74,25 @@ data Exp
   -- todo kaip išsiaiškint pilną return type (einam per visas vidines funkcijas?)
   | GoIIFE Exp -- immediately invoked function expression
   | GoArray MemberId [(Comment, Exp)]
-  
   | GoStruct MemberId [TypeId] -- struktūros name ir [Exp] yra struktūros elementai
   | GoStructElement LocalId TypeId -- struktūros elementas. name tiesiog integer + tipas
   | GoCreateStruct MemberId [Exp] -- struktūros sukurimas, paduodam struktūros name ir jo fields. todo ar fields bus [LocalId] ar [MemberId]
   | GoIf Exp Exp Exp
   | GoSwitch Exp [Exp] -- elementas, pagal kurio type darom switch ir sąrašas Go cases, paskutinis go case yra default su panic ir kintamojo priskirimas '_ = parameter'
   | GoCase MemberId Nat Nat Nat [Exp] -- pattern mathing pagal struct name ir return Exp, kur Exp gali būt metodo kvietimas, kintamojo gražinimas ar struct sukūrimas
-  
   | GoMethodCall MemberId [Exp] --metodo name, kurį kviečiam ir parametrai. Parametrai gali būt method call, struct sukūrimas ar tiesiog parametras. Prettyfiinant kiekvienas Exp elementas eina į skliaustus.
   | GoMethodCallParam Exp TypeId
   | ReturnExpression Exp TypeId
-  
   | BinOp Exp Exp Exp
   | Const String
-  | PlainGo String -- ^ Arbitrary GO code.
+  | -- | Arbitrary GO code.
+    PlainGo String
   deriving (Show, Eq)
 
 -- Outer and Inner signatures because function is curried
 data GoFunctionSignature
-  = OuterSignature MemberId [String] TypeId [TypeId] TypeId       -- name, parameter, return parameters (func...), final return type.
-  | InnerSignature TypeId [TypeId] TypeId                         -- parameter, return parameters (func...), final return type.
+  = OuterSignature MemberId [String] TypeId [TypeId] TypeId -- name, parameter, return parameters (func...), final return type.
+  | InnerSignature TypeId [TypeId] TypeId -- parameter, return parameters (func...), final return type.
   | AnonymousSignature TypeId
   deriving (Eq, Ord, Show)
 

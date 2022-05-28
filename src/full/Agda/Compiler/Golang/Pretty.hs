@@ -10,9 +10,6 @@ import Data.Char (chr, ord)
 import Data.List (intercalate)
 import qualified Text.PrettyPrint as T
 
-prettyPrintGo :: Pretty a => a -> String
-prettyPrintGo = show . pretty
-
 instance Pretty Go.Module where
   pretty (Go.Module (Go.GlobalId m) imports exports) =
     cat

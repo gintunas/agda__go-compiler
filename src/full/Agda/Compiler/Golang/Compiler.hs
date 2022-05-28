@@ -113,8 +113,9 @@ import Agda.Utils.Monad
   ( ifM,
     when,
   )
-import Agda.Utils.Pretty
+import qualified Agda.Utils.Pretty as AU
   ( prettyShow,
+    pretty,
     render,
   )
 import Agda.Utils.Singleton (singleton)
@@ -303,7 +304,7 @@ goPreModule env _ m ifile = do
     skippedModule = Module (goMod m) mempty mempty
 
     yesComp = do
-      m <- prettyShow <$> curMName
+      m <- AU.prettyShow <$> curMName
       out <- outFile_
       M.reportS "GO_COMPILER_DEBUG_LOG" 1 $ text $ repl [m, ifileDesc, out] "Compiling go <<0>> in <<1>> to <<2>>"
       kit <- coinductionKit
@@ -361,7 +362,7 @@ prefix :: [Char]
 prefix = "Gopiler"
 
 goMod :: ModuleName -> GlobalId
-goMod m = GlobalId (prefix : map prettyShow (mnameToList m))
+goMod m = GlobalId (prefix : map AU.prettyShow (mnameToList m))
 
 goFileName :: GlobalId -> String
 goFileName (GlobalId ms) =
@@ -389,7 +390,7 @@ goMember n
     -- so we disambiguate them using their name id.
     isNoName n =
     MemberId ("_" ++ show (nameId n))
-  | otherwise = MemberId $ prettyShow n
+  | otherwise = MemberId $ AU.prettyShow n
 
 global' :: QName -> TCM (Exp, GoQName)
 global' q = do
@@ -539,7 +540,7 @@ definition' kit q d t ls = do
       -- DEBUG_LOGGING
       M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ " data tupe:" M.<+%> q
 
-      s <- render <$> prettyTCM q
+      s <- AU.render <$> prettyTCM q
       typeError $ NotImplemented $ "Higher inductive types (" ++ s ++ ")"
 
     Datatype {} -> do
@@ -821,7 +822,7 @@ compileTerm kit paramCount args t = do
 
           isLetBodyPrimitive :: T.TTerm -> Bool
           isLetBodyPrimitive term = 
-            -- | is goEnvTrue defName || is goEnvFalse defName = Const $ prettyShow name
+            -- | is goEnvTrue defName || is goEnvFalse defName = Const $ AU.prettyShow name
             -- | otherwise = GoCreateStruct name []
             case term of
               T.TCon q -> True
@@ -849,7 +850,7 @@ compileTerm kit paramCount args t = do
         return $ comparethedef name (defName d)
         where
           comparethedef name defName
-            | is goEnvTrue defName || is goEnvFalse defName = Const $ prettyShow name
+            | is goEnvTrue defName || is goEnvFalse defName = Const $ AU.prettyShow name
             | otherwise = GoCreateStruct name []
       T.TCase sc ct def alts | T.CTData _ dt <- T.caseType ct -> do
         cases <- mapM (compileAlt kit paramCount args (paramCount - sc)) alts
@@ -891,7 +892,7 @@ writeModule m = do
   M.reportS "GO_COMPILER_DEBUG_LOG" 4 $ "out: :" M.<+%> out
   M.reportS "GO_COMPILER_DEBUG_LOG" 10 $ "module: :" <+> (multiLineText (show m))
 
-  liftIO (writeFile out (show.pretty m))
+  liftIO $ writeFile out $ (show . AU.pretty) m
 
 outFile :: GlobalId -> TCM FilePath
 outFile m = do

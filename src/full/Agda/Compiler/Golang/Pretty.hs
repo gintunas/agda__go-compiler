@@ -18,7 +18,7 @@ instance Pretty Go.Module where
   pretty (Go.Module (Go.GlobalId m) imports exports) =
     cat [ "package" <+> pretty (Go.GlobalId (tail m))
     , cat $ map pretty imports
-    , cat $ map pretty exports
+    , vcat $ map pretty exports
     ]
 
 instance Pretty Go.Exp where
@@ -101,7 +101,7 @@ instance Pretty Go.GoImports where
   pretty (Go.GoImportDeclarations declarations) = "\nimport (\n" <+> (hsep (map (text . importString) declarations)) <+> T.rparen
   pretty Go.GoImportField = "type GoImportable bool"
   pretty (Go.GoImportUsage "big") = "const _ = big.Above"
-  pretty (Go.GoImportUsage s) = "type _" <+> (text s) <+> ".GoImportable"
+  pretty (Go.GoImportUsage s) = "type _" <+> (text s <> ".GoImportable")
 
 importString :: String -> String
 importString s = "\"" ++ s ++ "\"\n"

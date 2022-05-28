@@ -104,6 +104,8 @@ import Agda.TypeChecking.Substitute as TC
 import Agda.TypeChecking.Telescope
 import Agda.Utils.FileName (isNewerThan)
 import Agda.Utils.IO.UTF8 (writeFile)
+import Agda.Utils.IO.Directory
+import Paths_Agda ( getDataDir )
 import Agda.Utils.Impossible (__IMPOSSIBLE__)
 import qualified Agda.Utils.List1 as List1
 import Agda.Utils.Maybe
@@ -182,7 +184,7 @@ goBackend' =
 
 data GoFlags = GoFlags
   { optGoCompile :: Bool,
-    optUseSimpleInt :: Bool
+    optUseUint64 :: Bool
   }
   deriving (Generic)
 
@@ -192,17 +194,20 @@ defaultGoFlags :: GoFlags
 defaultGoFlags =
   GoFlags
     { optGoCompile = False,
-      optUseSimpleInt = False
+      optUseUint64 = False
     }
 
 goCommandLineFlags :: [OptDescr (Flag GoFlags)]
 goCommandLineFlags =
   [ Option [] ["go"] (NoArg enable) "compile program using the go backend",
-    Option [] ["useSimpleInt"] (NoArg enableUint) "use Go uint64 instead of bigInteger for natural numbers"
+    Option [] ["UseUint64"] (NoArg enableUint) 
+    $ "use uint64 instead of bigInteger for natural numbers in Go code."
+    <> "\nWARNING:This may speed up operations performance but presents a risk of unhandled overflow."
+    <> "\nGo compiler does not check for uint64 overflow so overflowing operations will run without error and return overflown results."
   ]
   where
     enable o = pure o {optGoCompile = True}
-    enableUint o = pure o {optUseSimpleInt = True}
+    enableUint o = pure o {optUseUint64 = True}
 
 -- A static part of the GO backend's environment that does not
 -- change from module to module.
@@ -221,8 +226,8 @@ data GoEnv = GoEnv
       -- Various builtin names.
   }
 
--- Set compileDir to home
-compileDir = liftIO getHomeDirectory
+-- Set compileDir to go source directory in home
+compileDir = (liftIO getHomeDirectory) <> "/go/src" 
 
 --- Top-level compilation ---
 goPreCompile :: GoFlags -> TCM GoEnv
@@ -257,14 +262,21 @@ goPostCompile :: GoEnv -> IsMain -> Map.Map ModuleName Module -> TCM ()
 goPostCompile env _ ms = do
   -- DEBUG_LOGGING
   M.reportS "GO_COMPILER_DEBUG_LOG" 6 $ " ms:" M.<+%> ms
+  compDir <- compileDir
+  M.reportS "GO_COMPILER_DEBUG_LOG" 5 $ "compDir:" M.<+%> compDir
 
   forM_ ms $ \Module {modName} -> do
-    mdir <- compileDir
-    liftIO $ setCurrentDirectory mdir
+    liftIO $ setCurrentDirectory compDir
 
     -- DEBUG_LOGGING
-    M.reportS "GO_COMPILER_DEBUG_LOG" 5 $ "mdir:" M.<+%> mdir
     M.reportS "GO_COMPILER_DEBUG_LOG" 5 $ "goFile:" M.<+%> (goFileName modName)
+  
+  -- Copy RTE modules.
+  liftIO $ do
+    dataDir <- getDataDir
+    let srcDir = dataDir </> "Golang"
+    copyDirContent srcDir compDir
+
 
 --- Module compilation ---
 
@@ -321,13 +333,13 @@ goPostModule env _ isMain _ defs = do
   M.reportS "GO_COMPILER_DEBUG_LOG" 10 $ "m:" M.<+%> m
   M.reportS "GO_COMPILER_DEBUG_LOG" 10 $ "is:" M.<+%> is
 
-  let useSimpleInt = optUseSimpleInt (goEnvFlags env)
+  let useUint64 = optUseUint64 (goEnvFlags env)
 
   let importDeclarations =
-        GoImportDeclarations $ (map goImportDecl is) ++ if useSimpleInt then ["uintHelper"] else ["math/big", "helper"]
+        GoImportDeclarations $ (map goImportDecl is) ++ ["math/big", "goRteHelper"]
   let importUsages =
         (map goImportUsg is)
-          ++ if useSimpleInt then [(GoImportUsage "uintHelper")] else [(GoImportUsage "big"), (GoImportUsage "helper")]
+          ++ [(GoImportUsage "big"), (GoImportUsage "goRteHelper")]
   let mod =
         Module m (importDeclarations : ([GoImportField] ++ importUsages)) es
 
@@ -357,7 +369,7 @@ goMod m = GlobalId (prefix : map prettyShow (mnameToList m))
 
 goFileName :: GlobalId -> String
 goFileName (GlobalId ms) =
-  "go/src/Gopiler/"
+  "Gopiler/"
     ++ (intercalate "/" $ tail $ init ms)
     ++ case (tail $ init ms) of
       [] -> ""
@@ -954,15 +966,15 @@ goTypeApproximation' env counter _type shouldReturn = do approximate env counter
               NoAbs {} -> 0
         -- q - qname ; els - eliminations ordered left-to-right.
         Def q els
-          | is goEnvInteger -> return $ ConstructorType (getVarName counter) $ if useSimpleInt then "uint64" else "*big.Int"
-          | is goEnvNat -> return $ ConstructorType (getVarName counter) $ if useSimpleInt then "uint64" else "*big.Int"
+          | is goEnvInteger -> return $ ConstructorType (getVarName counter) $ if useUint64 then "uint64" else "*big.Int"
+          | is goEnvNat -> return $ ConstructorType (getVarName counter) $ if useUint64 then "uint64" else "*big.Int"
           -- | is goEnvBool -> return $ ConstructorType (getVarName counter) "bool"
           | otherwise -> do
             (MemberId name) <- liftTCM $ fullName q
             return $ ConstructorType (getVarName counter) name
           where
             is = isGoType env q
-            useSimpleInt = optUseSimpleInt (goEnvFlags env)
+            useUint64 = optUseUint64 (goEnvFlags env)
         Sort {} -> return EmptyType
         Var varN [] -> return $ GenericFunctionType (getVarName counter) ("T" ++ (show varN))
         _ -> return $ ConstructorType (getVarName counter) "any"
@@ -1016,7 +1028,7 @@ outFile_ = do
 
 literal :: GoEnv -> Literal -> Exp
 literal env lt = case lt of
-  (LitNat x) -> if useSimpleInt then SimpleInteger x else Integer x
+  (LitNat x) -> if useUint64 then SimpleInteger x else Integer x
   (LitWord64 x) -> __IMPOSSIBLE__
   (LitFloat x) -> __IMPOSSIBLE__
   (LitString x) -> __IMPOSSIBLE__
@@ -1024,30 +1036,30 @@ literal env lt = case lt of
   (LitQName x) -> __IMPOSSIBLE__
   LitMeta {} -> __IMPOSSIBLE__
   where
-    useSimpleInt = optUseSimpleInt (goEnvFlags env)
+    useUint64 = optUseUint64 (goEnvFlags env)
 
 compilePrim :: GoEnv -> T.TPrim -> Exp
-compilePrim env p = if optUseSimpleInt (goEnvFlags env) then compilePrimWithUint' p else compilePrim' p
+compilePrim env p = if optUseUint64 (goEnvFlags env) then compilePrimWithUint' p else compilePrim' p
 
 compilePrim' :: T.TPrim -> Exp
 compilePrim' p = case p of
-  T.PEqI -> Const "helper.Equals"
-  T.PSub -> Const "helper.Subtract"
-  T.PMul -> Const "helper.Multiply"
-  T.PAdd -> Const "helper.Add"
-  T.PGeq -> Const "helper.MoreOrEquals"
-  T.PLt -> Const "helper.Less"
+  T.PEqI -> Const "goRteHelper.Equals"
+  T.PSub -> Const "goRteHelper.Subtract"
+  T.PMul -> Const "goRteHelper.Multiply"
+  T.PAdd -> Const "goRteHelper.Add"
+  T.PGeq -> Const "goRteHelper.MoreOrEquals"
+  T.PLt -> Const "goRteHelper.Less"
   T.PEqC -> Const "=="
   T.PEqS -> Const "=="
-  T.PEq64 -> Const "helper.Equals"
-  T.PLt64 -> Const "helper.Less"
+  T.PEq64 -> Const "goRteHelper.Equals"
+  T.PLt64 -> Const "goRteHelper.Less"
   T.PEqF -> Const "PEqF"
   T.PEqQ -> Const "PEqQ"
   T.PRem -> Const "PRem"
   T.PQuot -> Const "PQuot"
-  T.PAdd64 -> Const "helper.Add"
-  T.PSub64 -> Const "helper.Subtract"
-  T.PMul64 -> Const "helper.Multiply"
+  T.PAdd64 -> Const "goRteHelper.Add"
+  T.PSub64 -> Const "goRteHelper.Subtract"
+  T.PMul64 -> Const "goRteHelper.Multiply"
   T.PRem64 -> Const "PRem64"
   T.PQuot64 -> Const "PQuot64"
   T.PITo64 -> Const "PITo64"
@@ -1057,23 +1069,23 @@ compilePrim' p = case p of
 
 compilePrimWithUint' :: T.TPrim -> Exp
 compilePrimWithUint' p = case p of
-  T.PEqI -> Const "uintHelper.UintEquals"
-  T.PSub -> Const "uintHelper.UintSubtract"
-  T.PMul -> Const "uintHelper.UintMultiply"
-  T.PAdd -> Const "uintHelper.UintAdd"
-  T.PGeq -> Const "uintHelper.UintMoreOrEquals"
-  T.PLt -> Const "uintHelper.UintLess"
+  T.PEqI -> Const "goRteHelper.UintEquals"
+  T.PSub -> Const "goRteHelper.UintSubtract"
+  T.PMul -> Const "goRteHelper.UintMultiply"
+  T.PAdd -> Const "goRteHelper.UintAdd"
+  T.PGeq -> Const "goRteHelper.UintMoreOrEquals"
+  T.PLt -> Const "goRteHelper.UintLess"
   T.PEqC -> Const "=="
   T.PEqS -> Const "=="
-  T.PEq64 -> Const "uintHelper.UintEquals"
-  T.PLt64 -> Const "uintHelper.UintLess"
+  T.PEq64 -> Const "goRteHelper.UintEquals"
+  T.PLt64 -> Const "goRteHelper.UintLess"
   T.PEqF -> Const "PEqF"
   T.PEqQ -> Const "PEqQ"
   T.PRem -> Const "PRem"
   T.PQuot -> Const "PQuot"
-  T.PAdd64 -> Const "uintHelper.UintAdd"
-  T.PSub64 -> Const "uintHelper.UintSubtract"
-  T.PMul64 -> Const "uintHelper.UintMultiply"
+  T.PAdd64 -> Const "goRteHelper.UintAdd"
+  T.PSub64 -> Const "goRteHelper.UintSubtract"
+  T.PMul64 -> Const "goRteHelper.UintMultiply"
   T.PRem64 -> Const "PRem64"
   T.PQuot64 -> Const "PQuot64"
   T.PITo64 -> Const "PITo64"

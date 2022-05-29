@@ -1,7 +1,6 @@
 module compilationTests where
 
--- open import Agda.Builtin.Nat
--- open import Agda.Builtin.Int
+open import Agda.Builtin.Nat
 open import Agda.Builtin.Bool
 
 -------------------------------------------------------------------------------
@@ -12,54 +11,54 @@ and : Bool → Bool → Bool
 and true true = true
 and _ _ = false
 
--- xor : Bool → Bool → Bool
--- xor true false = true
--- xor false true = true
--- xor _ _ = false
+xor : Bool → Bool → Bool
+xor true false = true
+xor false true = true
+xor _ _ = false
 
--- not : Bool → Bool
--- not true = false
--- not false = true
+not : Bool → Bool
+not true = false
+not false = true
 
 -- DOESNT WORK BECAUSE OF LET PARSING
--- or : Bool → Bool → Bool
--- or true _ = true
--- or _ true = true
--- or _ _ = false
+or : Bool → Bool → Bool
+or true _ = true
+or _ true = true
+or _ _ = false
 
 -------------------------------------------------------------------------------
 
--- add : Nat → Nat → Nat
--- add n zero      = n
--- add n (suc m)   = add (suc n) m
-
--- add : Int → Int → Int
--- add (pos n) (pos m) = pos (n + m)
--- add (pos n) (negsuc m) = pos m
--- add (negsuc n) (pos m) = negsuc m
--- add (negsuc n) (negsuc m) = pos m 
+add : Nat → Nat → Nat
+add n zero      = n
+add n (suc m)   = add (suc n) m
 
 -- DOESNT WORK BECAUSE OF LET PARSING
--- subtract : Nat → Nat → Nat
--- subtract zero _ = zero
--- subtract n zero = n
--- subtract n (suc m) = subtract (suc n) m
+sub : Nat → Nat → Nat
+sub zero _ = zero
+sub n zero = n
+sub (suc n) (suc m) = sub n m
+
+-- DOESNT WORK BECAUSE OF LET PARSING
+mul : Nat → Nat → Nat
+mul zero _ = zero
+mul _ zero = zero
+mul n (suc m) = add n (mul n m)
 
 -------------------------------------------------------------------------------
 
 -- FIBONACCI
--- fib : Nat → Nat
--- fib 0 = 0
--- fib 1 = 1
--- fib (suc (suc n)) = fib (suc n) + fib n
+fib : Nat → Nat
+fib 0 = 0
+fib 1 = 1
+fib (suc (suc n)) = fib (suc n) + fib n
 
 -------------------------------------------------------------------------------
 
 -- FOR
 
--- factorial : Nat -> Nat
--- factorial zero = 1  
--- factorial (suc n) = (suc n) * factorial n
+factorial : Nat -> Nat
+factorial zero = 1  
+factorial (suc n) = (suc n) * factorial n
 
 -------------------------------------------------------------------------------
 

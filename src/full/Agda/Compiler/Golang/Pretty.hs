@@ -35,8 +35,8 @@ instance Pretty Go.Exp where
       Go.GoVar v -> textAndGetVarName v
       Go.GoLet varName expBody boundedExp -> "\n" <+> text varName <+> ":=" <+> pretty expBody <+> pretty boundedExp
       Go.GoInterface id -> "type" <+> pretty id <+> "= any"
-      Go.GoFunction signatures (Go.GoSwitch a b) -> (hsep $ map pretty signatures) <+> (pretty (Go.GoSwitch a b)) <+> (hsep $ replicate (length signatures) T.rbrace)
-      Go.GoFunction signatures body -> (hsep $ map pretty signatures) <+> (pretty body) <+> (hsep $ replicate (length signatures) T.rbrace)
+      Go.GoFunction signatures (Go.GoSwitch a b) -> (hsep $ map pretty signatures) <+> (pretty (Go.GoSwitch a b)) <+> (hsep $ replicate (length signatures) "\n}")
+      Go.GoFunction signatures body -> (hsep $ map pretty signatures) <+> (pretty body) <+> (hsep $ replicate (length signatures) "\n}")
       Go.GoIIFE exp -> pretty exp <> "()"
       Go.GoTrue id -> "const" <+> pretty id <+> "= true"
       Go.GoFalse id -> "const" <+> pretty id <+> "= false"
@@ -44,7 +44,7 @@ instance Pretty Go.Exp where
       Go.GoStruct id elems -> "type" <+> pretty id <+> "struct" <+> (T.braces (hsep $ map pretty elems))
       Go.GoStructElement localId typeId -> "_" <+> pretty localId <+> pretty typeId <+> T.semi
       Go.GoCreateStruct name params -> (pretty name) <+> T.lbrace <+> (joinStructParams (map pretty params)) <+> T.rbrace
-      Go.GoIf a b c -> "if (" <+> (pretty a) <+> ") {" <+> (pretty b) <+> "} else {" <+> pretty c <+> T.rbrace
+      Go.GoIf a b c -> "\nif (" <+> (pretty a) <+> ") {" <+> (pretty b) <+> "\n} else {" <+> pretty c <+> "\n}"
       -- OLD IMPLEMENTATION
       -- Go.GoSwitch v cases -> "switch type_" <+> (pretty v) <+> (text "  := ") <+> (pretty v) <+> (text ".(type) {\n") <+> (hsep $ map pretty cases) <+> "\ndefault:\n_ = type_"<+> (pretty v) <+> ";\n panic(\"Unreachable\");\n}"
       Go.GoSwitch v cases -> "\nswitch" <+> (pretty v) <+> T.lbrace <+> (hsep $ map pretty cases) <+> "\ndefault" <+> T.colon <+> "panic(\"Unreachable\")}"
@@ -55,7 +55,7 @@ instance Pretty Go.Exp where
       Go.GoMethodCallParam exp typeId -> T.lparen <+> (pretty exp) <+> ".(" <+> pretty typeId <+> "))"
       -- OLD IMPLEMENTATION
       -- Go.ReturnExpression exp t -> "return helper.Id(" <+> (pretty exp) <+> ").(" <+> pretty t <+> T.rparen
-      Go.ReturnExpression exp t -> "return" <+> (pretty exp)
+      Go.ReturnExpression exp t -> "\nreturn" <+> (pretty exp)
       Go.BinOp a b c -> (pretty a) <+> T.lparen <+> (T.parens (pretty b)) <+> T.comma <+> (T.parens (pretty c)) <+> T.rparen
       Go.Const s -> text s
       _ -> text ""

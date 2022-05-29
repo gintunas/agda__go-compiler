@@ -10,6 +10,7 @@ import Agda.Compiler.Backend
   )
 import Agda.Compiler.Common hiding (compileDir)
 import qualified Agda.Compiler.Golang.Misc as M
+import qualified Agda.Compiler.Golang.Pretty as GoPretty
 import Agda.Compiler.Golang.Syntax
   ( Exp
       ( BinOp,
@@ -197,7 +198,7 @@ defaultGoFlags =
 goCommandLineFlags :: [OptDescr (Flag GoFlags)]
 goCommandLineFlags =
   [ Option [] ["go"] (NoArg enable) "compile program using the go backend",
-    Option [] ["UseUint64"] (NoArg enableUint) 
+    Option [] ["useUint64"] (NoArg enableUint) 
     $ "use uint64 instead of bigInteger for natural numbers in Go code."
     <> "\nWARNING:This may speed up operations performance but presents a risk of unhandled overflow."
     <> "\nGo compiler does not check for uint64 overflow so overflowing operations will run without error and return overflown results."
@@ -298,7 +299,7 @@ goPreModule env _ m ifile = do
 
     noComp = do
       name <- curMName
-      M.reportS "GO_COMPILER_DEBUG_LOG" 2 $ "No compilation needed for:" M.<+%> name
+      M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "No compilation needed for:" M.<+%> name
       return $ Skip skippedModule
 
     skippedModule = Module (goMod m) mempty mempty
@@ -306,7 +307,7 @@ goPreModule env _ m ifile = do
     yesComp = do
       m <- AU.prettyShow <$> curMName
       out <- outFile_
-      M.reportS "GO_COMPILER_DEBUG_LOG" 1 $ text $ repl [m, ifileDesc, out] "Compiling go <<0>> in <<1>> to <<2>>"
+      M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ text $ repl [m, ifileDesc, out] "Compiling go <<0>> in <<1>> to <<2>>"
       kit <- coinductionKit
       return $
         Recompile $
@@ -523,7 +524,7 @@ definition' kit q d t ls = do
 
           -- DEBUG_LOGGING
           M.reportS "GO_COMPILER_DEBUG_LOG" 25 $ "functionSignature:" M.<+%!> functionSignature
-          M.reportS "GO_COMPILER_DEBUG_LOG" 25 $ "funBody':" M.<+%> funBody'
+          M.reportS "GO_COMPILER_DEBUG_LOG" 25 $ "funBody':" M.<+%!> funBody'
           M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "given:" M.<+%> given
           M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "etaN:" M.<+%> etaN
           M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "function returnType:" M.<+%> returnType
@@ -811,6 +812,8 @@ compileTerm kit paramCount args t = do
         M.reportS "GO_COMPILER_DEBUG_LOG" 30 $ "GoLet expWithBoundedLet:" M.<+%> expWithBoundedLet
 
         bodyComp <- compileTermWithEnv body
+        -- TODO: get typeId with this function and add it to anonymous signature
+        -- (_, (ConstructorType _ typeId)) <- goTelApproximation (fst kit) t [T.ArgUsed]
 
         if isLetBodyPrimitive body
           then createLetExp $ compileTermWithEnv body

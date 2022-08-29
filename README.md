@@ -37,9 +37,10 @@ Contributing to Agda
 
 [agdawiki]: http://wiki.portal.chalmers.se/agda/pmwiki.php
 
+---
 
 ## MY COMMENTS
----
+
 1. Environment setup and other things are detailed in the bachelor's thesis (Gintautas Jurgelevičius - Dependently typed programming language
 translation to Go programming language)
 

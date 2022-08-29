@@ -36,3 +36,11 @@ Contributing to Agda
 * [Haskell style-guide](https://github.com/andreasabel/haskell-style-guide/blob/master/haskell-style.md)
 
 [agdawiki]: http://wiki.portal.chalmers.se/agda/pmwiki.php
+
+
+## MY COMMENTS
+---
+1. Environment setup and other things are detailed in the bachelor's thesis (Gintautas Jurgelevičius - Dependently typed programming language
+translation to Go programming language)
+
+2. Output from the compiler with helper files for compilation (from dir `~/go/src`) are stored under `misc/go/src`. This is not related to Agda in any way, it's just for the archive.

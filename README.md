@@ -37,6 +37,9 @@ Contributing to Agda
 
 [agdawiki]: http://wiki.portal.chalmers.se/agda/pmwiki.php
 
+<br />
+<br />
+
 ---
 
 ## MY COMMENTS
